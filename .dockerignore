@@ -1,6 +1,7 @@
 .git
-node_modules
-test
+**/node_modules
+**/test
+**/dist
 data
 *.db
 *.db-*

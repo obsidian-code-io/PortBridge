@@ -1,0 +1,19 @@
+{
+  "name": "@obsidiancode/portbridge-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@obsidiancode/portbridge-protocol": "workspace:*",
+    "dockerode": "^4.0.2",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.31"
+  }
+}

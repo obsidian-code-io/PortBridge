@@ -1,0 +1,17 @@
+{
+  "name": "@obsidiancode/portbridge-cli",
+  "version": "0.1.0",
+  "description": "PortBridge CLI: reach a cloud container from your laptop over an outbound tunnel.",
+  "type": "module",
+  "bin": {
+    "portbridge": "./src/bin.ts"
+  },
+  "files": ["src", "dist"],
+  "dependencies": {
+    "@obsidiancode/portbridge-protocol": "workspace:*",
+    "@obsidiancode/portbridge-tunnel": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

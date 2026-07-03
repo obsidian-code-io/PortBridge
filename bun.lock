@@ -4,14 +4,43 @@
   "workspaces": {
     "": {
       "name": "portbridge",
+      "devDependencies": {
+        "bun-types": "^1.1.38",
+        "typescript": "^5.6.3",
+      },
+    },
+    "apps/server": {
+      "name": "@obsidiancode/portbridge-server",
+      "version": "0.1.0",
       "dependencies": {
+        "@obsidiancode/portbridge-protocol": "workspace:*",
         "dockerode": "^4.0.2",
         "hono": "^4.6.14",
       },
       "devDependencies": {
         "@types/dockerode": "^3.3.31",
-        "bun-types": "^1.1.38",
-        "typescript": "^5.6.3",
+      },
+    },
+    "packages/cli": {
+      "name": "@obsidiancode/portbridge-cli",
+      "version": "0.1.0",
+      "bin": {
+        "portbridge": "./src/bin.ts",
+      },
+      "dependencies": {
+        "@obsidiancode/portbridge-protocol": "workspace:*",
+        "@obsidiancode/portbridge-tunnel": "workspace:*",
+      },
+    },
+    "packages/protocol": {
+      "name": "@obsidiancode/portbridge-protocol",
+      "version": "0.1.0",
+    },
+    "packages/tunnel-core": {
+      "name": "@obsidiancode/portbridge-tunnel",
+      "version": "0.1.0",
+      "dependencies": {
+        "@obsidiancode/portbridge-protocol": "workspace:*",
       },
     },
   },
@@ -23,6 +52,14 @@
     "@grpc/proto-loader": ["@grpc/proto-loader@0.7.15", "", { "dependencies": { "lodash.camelcase": "^4.3.0", "long": "^5.0.0", "protobufjs": "^7.2.5", "yargs": "^17.7.2" }, "bin": { "proto-loader-gen-types": "build/bin/proto-loader-gen-types.js" } }, "sha512-tMXdRCfYVixjuFK+Hk0Q1s38gV9zDiDJfWL3h1rv4Qc39oILCu1TRTDt7+fGUI8K4G1Fj125Hx/ru3azECWTyQ=="],
 
     "@js-sdsl/ordered-map": ["@js-sdsl/ordered-map@4.4.2", "", {}, "sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw=="],
+
+    "@obsidiancode/portbridge-cli": ["@obsidiancode/portbridge-cli@workspace:packages/cli"],
+
+    "@obsidiancode/portbridge-protocol": ["@obsidiancode/portbridge-protocol@workspace:packages/protocol"],
+
+    "@obsidiancode/portbridge-server": ["@obsidiancode/portbridge-server@workspace:apps/server"],
+
+    "@obsidiancode/portbridge-tunnel": ["@obsidiancode/portbridge-tunnel@workspace:packages/tunnel-core"],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 

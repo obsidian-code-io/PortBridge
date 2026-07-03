@@ -1,0 +1,14 @@
+{
+  "name": "@obsidiancode/portbridge-protocol",
+  "version": "0.1.0",
+  "description": "PortBridge agent-tunnel wire protocol: message types, stream-token helpers, and codec (shared by server and client).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "files": ["src", "dist"],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

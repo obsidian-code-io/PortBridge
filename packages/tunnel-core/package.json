@@ -1,0 +1,17 @@
+{
+  "name": "@obsidiancode/portbridge-tunnel",
+  "version": "0.1.0",
+  "description": "PortBridge agent-tunnel client library: dial out to a PortBridge server and bind localhost ports to cloud container ports.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "files": ["src", "dist"],
+  "dependencies": {
+    "@obsidiancode/portbridge-protocol": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
