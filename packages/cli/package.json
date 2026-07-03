@@ -9,7 +9,8 @@
   "files": ["src", "dist"],
   "dependencies": {
     "@obsidiancode/portbridge-protocol": "workspace:*",
-    "@obsidiancode/portbridge-tunnel": "workspace:*"
+    "@obsidiancode/portbridge-tunnel": "workspace:*",
+    "cac": "^6.7.14"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
