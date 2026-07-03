@@ -180,6 +180,17 @@ describe("agent-tunnel end to end", () => {
     expect(h.registry.size()).toBe(0);
   });
 
+  test("a stream that floods binary before handshaking is closed (bounded memory)", async () => {
+    const h = startServer();
+    const ws = new WebSocket(`ws://127.0.0.1:${h.port}/agent/stream`);
+    ws.binaryType = "arraybuffer";
+    const code = await new Promise<number>((resolve) => {
+      ws.onopen = () => ws.send(new Uint8Array(300 * 1024)); // > 256KB pre-handshake cap
+      ws.onclose = (e) => resolve(e.code);
+    });
+    expect(code).toBe(1008);
+  });
+
   test("server-side revoke reaches the control client and drops the tunnel", async () => {
     const h = startServer();
     const opened = await openTunnel(h.port, "target1", echoPort);

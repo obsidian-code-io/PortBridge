@@ -36,6 +36,7 @@ interface RawTextWs {
 interface ControlState {
   readonly sink: ControlSink;
   awaitingPong: number;
+  closed: boolean;
   interval?: ReturnType<typeof setInterval>;
 }
 
@@ -68,14 +69,23 @@ async function handleOpen(deps: ControlDeps, state: ControlState, msg: OpenMessa
       return;
     }
     const dt = await deps.dial(msg.targetId, msg.targetPort);
-    const { forward, streamToken } = deps.registry.open({
-      targetId: dt.targetId,
-      targetName: dt.targetName,
-      targetPort: msg.targetPort,
-      network: dt.network,
-      ttlMinutes: msg.ttlMinutes,
-      control: state.sink,
-    });
+    if (state.closed) return; // control dropped during validation — don't leak an unreapable tunnel
+    const opened = deps.registry.open(
+      {
+        targetId: dt.targetId,
+        targetName: dt.targetName,
+        targetPort: msg.targetPort,
+        network: dt.network,
+        ttlMinutes: msg.ttlMinutes,
+        control: state.sink,
+      },
+      deps.config.maxForwards,
+    );
+    if (opened === undefined) {
+      state.sink.send({ type: "error", reqId: msg.reqId, message: "MAX_FORWARDS reached" });
+      return;
+    }
+    const { forward, streamToken } = opened;
     deps.audit.write({
       actor: "agent",
       action: "tunnel_opened",
@@ -139,7 +149,7 @@ function teardown(deps: ControlDeps, state: ControlState): void {
 export function makeControlEvents(deps: ControlDeps) {
   return () => ({
     onOpen(_evt: Event, ws: WSContext): void {
-      const state: ControlState = { sink: controlSink(ws.raw as RawTextWs), awaitingPong: 0 };
+      const state: ControlState = { sink: controlSink(ws.raw as RawTextWs), awaitingPong: 0, closed: false };
       state.interval = startHeartbeat(state, ws);
       states.set(rawOf(ws), state);
     },
@@ -157,6 +167,7 @@ export function makeControlEvents(deps: ControlDeps) {
     onClose(_evt: CloseEvent, ws: WSContext): void {
       const state = states.get(rawOf(ws));
       if (state === undefined) return;
+      state.closed = true;
       teardown(deps, state);
       states.delete(rawOf(ws));
     },

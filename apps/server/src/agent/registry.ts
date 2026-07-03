@@ -62,8 +62,14 @@ export class TunnelRegistry implements ForwardRegistry {
     return [...this.entries.values()].map((e) => e.forward);
   }
 
-  /** Register a tunnel; returns the forward + the token that authorizes its streams. */
-  open(input: OpenTunnelInput): { forward: Forward; streamToken: string } {
+  /**
+   * Register a tunnel; returns the forward + the token that authorizes its
+   * streams, or undefined if the registry is already at `maxForwards`. The cap
+   * is checked and the entry inserted synchronously (no await between), so
+   * pipelined opens can't race past it.
+   */
+  open(input: OpenTunnelInput, maxForwards: number): { forward: Forward; streamToken: string } | undefined {
+    if (this.entries.size >= maxForwards) return undefined;
     const createdAt = nowSeconds();
     const ttl = input.ttlMinutes === "never" ? "never" : input.ttlMinutes || this.defaultTtlMinutes;
     const forward: Forward = {

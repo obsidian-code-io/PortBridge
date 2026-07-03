@@ -13,7 +13,9 @@ function stream(): { sink: StreamSink; closes: number } {
 }
 
 function openOne(reg: TunnelRegistry, sink: ControlSink, ttl: number | "never" = 15) {
-  return reg.open({ targetId: "t", targetName: "echo", targetPort: 5432, network: "bridge", ttlMinutes: ttl, control: sink });
+  const result = reg.open({ targetId: "t", targetName: "echo", targetPort: 5432, network: "bridge", ttlMinutes: ttl, control: sink }, 1000);
+  if (result === undefined) throw new Error("open unexpectedly returned undefined");
+  return result;
 }
 
 describe("TunnelRegistry", () => {
@@ -79,6 +81,16 @@ describe("TunnelRegistry", () => {
     const due = reg.expireDue(forward.createdAt + 16 * 60);
     expect(due.map((f) => f.id)).toEqual([forward.id]);
     expect(reg.size()).toBe(1); // the "never" one remains
+  });
+
+  test("open enforces the cap synchronously (no TOCTOU)", () => {
+    const reg = new TunnelRegistry(60);
+    const c = control();
+    const first = reg.open({ targetId: "t", targetName: "n", targetPort: 1, network: "bridge", ttlMinutes: 15, control: c.sink }, 1);
+    expect(first).toBeDefined();
+    const second = reg.open({ targetId: "t", targetName: "n", targetPort: 2, network: "bridge", ttlMinutes: 15, control: c.sink }, 1);
+    expect(second).toBeUndefined(); // cap reached
+    expect(reg.size()).toBe(1);
   });
 
   test("closeByControl closes every tunnel owned by a dropped control", () => {
