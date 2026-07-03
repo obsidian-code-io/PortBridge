@@ -9,7 +9,11 @@
   "types": "./src/index.ts",
   "files": ["src", "dist"],
   "dependencies": {
-    "@obsidiancode/portbridge-protocol": "workspace:*"
+    "@obsidiancode/portbridge-protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
