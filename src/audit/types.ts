@@ -28,6 +28,24 @@ export interface AuditWriter {
   write(event: AuditEvent): void;
 }
 
+/** A persisted audit row (snake_case mirrors the SQLite columns). */
+export interface AuditRow {
+  readonly id: string;
+  readonly at: number;
+  readonly actor: string;
+  readonly action: string;
+  readonly forward_id: string | null;
+  readonly target_name: string | null;
+  readonly target_port: string | null;
+  readonly host_port: string | null;
+  readonly ttl_minutes: number | null;
+  readonly detail: string | null;
+}
+
+export interface AuditReader {
+  query(action: string | undefined, limit: number): AuditRow[];
+}
+
 /** Placeholder writer used until the SQLite writer is wired in (Phase 5). */
 export const consoleAuditWriter: AuditWriter = {
   write(event: AuditEvent): void {

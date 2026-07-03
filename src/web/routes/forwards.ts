@@ -3,16 +3,21 @@ import type { Context } from "hono";
 import type Docker from "dockerode";
 import type { Config } from "../../config.ts";
 import type { AppEnv } from "../env.ts";
-import type { CreateForwardInput } from "../../docker/forward-types.ts";
+import type { AuditWriter } from "../../audit/types.ts";
+import type { CreateForwardInput, Forward } from "../../docker/forward-types.ts";
 import { listTargets } from "../../docker/containers.ts";
-import { createForward, deleteForward, extendForward, listForwards } from "../../docker/forwards.ts";
-import { ForwardError } from "../../docker/forwards-errors.ts";
 import {
-  forwardError,
-  forwardForm,
-  forwardResultCard,
-  managedForwardsTable,
-} from "../views/forwards.ts";
+  createForward,
+  deleteForward,
+  extendForward,
+  listForwards,
+  tailForwardLogs,
+} from "../../docker/forwards.ts";
+import { ForwardError } from "../../docker/forwards-errors.ts";
+import { forwardError, forwardForm, forwardResultCard, managedForwardsTable } from "../views/forwards.ts";
+import { logsPage } from "../views/logs.ts";
+
+const LOG_TAIL_LINES = 200;
 
 type ParseResult =
   | { readonly ok: true; readonly input: CreateForwardInput }
@@ -53,11 +58,39 @@ function messageFor(err: unknown): string {
   return "Failed to create forward — check the sidecar logs.";
 }
 
-async function handleCreate(docker: Docker, config: Config, c: Context) {
+function auditCreated(audit: AuditWriter, action: "forward_created" | "forward_extend", f: Forward): void {
+  audit.write({
+    actor: "admin",
+    action,
+    forwardId: f.id,
+    targetName: f.targetName,
+    targetPort: String(f.targetPort),
+    hostPort: String(f.hostPort),
+    ttlMinutes: f.expiresAt === "never" ? undefined : Math.round((f.expiresAt - f.createdAt) / 60),
+    detail: f.expiresAt === "never" ? "never" : undefined,
+  });
+}
+
+async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, c: Context) {
   const parsed = parseForwardInput(await c.req.parseBody());
   if (!parsed.ok) return c.html(forwardError(parsed.error), 400);
   try {
     const forward = await createForward(docker, config, parsed.input);
+    auditCreated(audit, "forward_created", forward);
+    c.header("HX-Trigger", "forwardsChanged");
+    return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
+  } catch (err) {
+    audit.write({ actor: "admin", action: "create_failed", detail: messageFor(err) });
+    return c.html(forwardError(messageFor(err)), 400);
+  }
+}
+
+async function handleExtend(docker: Docker, config: Config, audit: AuditWriter, c: Context, id: string) {
+  const ttlRaw = asString((await c.req.parseBody())["ttl"]) ?? String(config.defaultTtlMinutes);
+  const ttl = ttlRaw === "never" ? "never" : asInt(ttlRaw) ?? config.defaultTtlMinutes;
+  try {
+    const forward = await extendForward(docker, config, id, ttl);
+    auditCreated(audit, "forward_extend", forward);
     c.header("HX-Trigger", "forwardsChanged");
     return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
   } catch (err) {
@@ -65,7 +98,7 @@ async function handleCreate(docker: Docker, config: Config, c: Context) {
   }
 }
 
-export function forwardRoutes(docker: Docker, config: Config): Hono<AppEnv> {
+export function forwardRoutes(docker: Docker, config: Config, audit: AuditWriter): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.get("/forwards/panel", (c) => c.html(""));
@@ -81,22 +114,22 @@ export function forwardRoutes(docker: Docker, config: Config): Hono<AppEnv> {
     return c.html(managedForwardsTable(forwards, hostOf(c.req.header("host")), Math.floor(Date.now() / 1000)));
   });
 
-  router.post("/forwards", (c) => handleCreate(docker, config, c));
-
-  router.post("/forwards/:id/extend", async (c) => {
-    const ttlRaw = asString((await c.req.parseBody())["ttl"]) ?? String(config.defaultTtlMinutes);
-    const ttl = ttlRaw === "never" ? "never" : asInt(ttlRaw) ?? config.defaultTtlMinutes;
+  router.get("/forwards/:id/logs", async (c) => {
+    const id = c.req.param("id");
     try {
-      const forward = await extendForward(docker, config, c.req.param("id"), ttl);
-      c.header("HX-Trigger", "forwardsChanged");
-      return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
+      return c.html(logsPage(id, await tailForwardLogs(docker, id, LOG_TAIL_LINES), c.get("csrf")));
     } catch (err) {
-      return c.html(forwardError(messageFor(err)), 400);
+      return c.html(logsPage(id, messageFor(err), c.get("csrf")), 404);
     }
   });
 
+  router.post("/forwards", (c) => handleCreate(docker, config, audit, c));
+  router.post("/forwards/:id/extend", (c) => handleExtend(docker, config, audit, c, c.req.param("id")));
+
   router.post("/forwards/:id/delete", async (c) => {
-    await deleteForward(docker, c.req.param("id"));
+    const id = c.req.param("id");
+    await deleteForward(docker, id);
+    audit.write({ actor: "admin", action: "forward_deleted", forwardId: id });
     c.header("HX-Trigger", "forwardsChanged");
     return c.html("");
   });

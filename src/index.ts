@@ -7,7 +7,8 @@
 import { loadConfig, ConfigError, type Config } from "./config.ts";
 import { getDocker } from "./docker/client.ts";
 import { startReaper } from "./docker/reaper.ts";
-import { consoleAuditWriter } from "./audit/types.ts";
+import { openAuditDb } from "./audit/db.ts";
+import { SqliteAuditLog } from "./audit/log.ts";
 import { createApp } from "./web/app.ts";
 
 function loadConfigOrExit(): Config {
@@ -22,8 +23,8 @@ function loadConfigOrExit(): Config {
 
 const config = loadConfigOrExit();
 const docker = getDocker(config);
-const audit = consoleAuditWriter;
-const app = createApp(docker, config, audit);
+const audit = new SqliteAuditLog(openAuditDb(config.dataDir));
+const app = createApp(docker, config, audit, audit);
 
 async function startBackground(): Promise<void> {
   try {

@@ -229,6 +229,35 @@ export async function extendForward(
   });
 }
 
+/** Docker non-TTY logs are frame-multiplexed: [type,0,0,0,len(4 BE)] + payload. */
+function demuxDockerLogs(buf: Buffer): string {
+  const parts: string[] = [];
+  let i = 0;
+  while (i + 8 <= buf.length) {
+    const len = buf.readUInt32BE(i + 4);
+    const end = i + 8 + len;
+    if (end > buf.length) break;
+    parts.push(buf.toString("utf8", i + 8, end));
+    i = end;
+  }
+  return parts.length > 0 ? parts.join("") : buf.toString("utf8");
+}
+
+/** Tail the sidecar's logs — the debugging story for unreachable targets. */
+export async function tailForwardLogs(docker: Docker, id: string, lines: number): Promise<string> {
+  const summaries = await docker.listContainers({ all: true, filters: { label: [`${LABEL.id}=${id}`] } });
+  const first = summaries[0];
+  if (first === undefined) throw new ForwardNotFoundError(`forward not found: ${id}`);
+  const out = await docker.getContainer(first.Id).logs({
+    follow: false,
+    stdout: true,
+    stderr: true,
+    tail: lines,
+    timestamps: false,
+  });
+  return demuxDockerLogs(Buffer.isBuffer(out) ? out : Buffer.from(String(out)));
+}
+
 function statusCode(err: unknown): number | undefined {
   if (typeof err === "object" && err !== null && "statusCode" in err) {
     const code = (err as { statusCode: unknown }).statusCode;
