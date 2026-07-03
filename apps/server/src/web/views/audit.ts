@@ -1,5 +1,6 @@
 import { html } from "hono/html";
 import type { AuditRow } from "../../audit/types.ts";
+import type { BrandConfig } from "../../brand/types.ts";
 import type { Html } from "./html.ts";
 import { layout } from "./layout.ts";
 
@@ -59,11 +60,16 @@ function auditTable(rows: readonly AuditRow[]): Html {
   </table>`;
 }
 
-export function auditPage(rows: readonly AuditRow[], selected: string | undefined, csrf: string): Html {
+export function auditPage(
+  rows: readonly AuditRow[],
+  selected: string | undefined,
+  brand: BrandConfig,
+  csrf: string,
+): Html {
   const body = html`<section>
     <h2 class="mb-3 text-lg font-medium">Audit log <span class="text-xs text-slate-500">(last 500)</span></h2>
     ${filterBar(selected)}
     ${auditTable(rows)}
   </section>`;
-  return layout("Audit", body, csrf);
+  return layout("Audit", body, { brand, csrf });
 }

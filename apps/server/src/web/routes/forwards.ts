@@ -129,9 +129,9 @@ export function forwardRoutes(
   router.get("/forwards/:id/logs", async (c) => {
     const id = c.req.param("id");
     try {
-      return c.html(logsPage(id, await tailForwardLogs(docker, id, LOG_TAIL_LINES), c.get("csrf")));
+      return c.html(logsPage(id, await tailForwardLogs(docker, id, LOG_TAIL_LINES), c.get("brand"), c.get("csrf")));
     } catch (err) {
-      return c.html(logsPage(id, messageFor(err), c.get("csrf")), 404);
+      return c.html(logsPage(id, messageFor(err), c.get("brand"), c.get("csrf")), 404);
     }
   });
 

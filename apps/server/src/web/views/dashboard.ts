@@ -1,5 +1,6 @@
 import { html } from "hono/html";
 import type { Target } from "../../docker/containers.ts";
+import type { BrandConfig } from "../../brand/types.ts";
 import type { Html } from "./html.ts";
 import { layout } from "./layout.ts";
 import { targetsTable, errorBanner } from "./targets.ts";
@@ -48,6 +49,11 @@ function dashboardBody(targets: readonly Target[], error: string | undefined): H
   </section>`;
 }
 
-export function dashboardPage(targets: readonly Target[], csrf: string, error?: string): Html {
-  return layout("Dashboard", dashboardBody(targets, error), csrf);
+export function dashboardPage(
+  targets: readonly Target[],
+  brand: BrandConfig,
+  csrf: string,
+  error?: string,
+): Html {
+  return layout("Dashboard", dashboardBody(targets, error), { brand, csrf });
 }

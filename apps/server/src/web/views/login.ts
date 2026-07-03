@@ -1,31 +1,34 @@
 import { html } from "hono/html";
 import type { Html } from "./html.ts";
+import type { BrandConfig } from "../../brand/types.ts";
 import { layout } from "./layout.ts";
 
 function loginBody(error: string | undefined): Html {
   return html`<div class="mx-auto mt-16 max-w-sm">
     <h2 class="mb-4 text-lg font-medium">Sign in</h2>
     ${error !== undefined
-      ? html`<div class="mb-3 rounded-md border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">${error}</div>`
+      ? html`<div class="mb-3 rounded-md border px-3 py-2 text-sm" style="border-color:var(--brand-danger);color:var(--brand-danger)">${error}</div>`
       : ""}
     <form method="post" action="/login" class="space-y-3">
       <label class="block text-sm">
-        <span class="mb-1 block text-slate-400">Admin token</span>
+        <span class="mb-1 block" style="color:var(--brand-muted)">Admin token</span>
         <input
           type="password"
           name="token"
           autocomplete="current-password"
           required
-          class="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 outline-none focus:border-slate-500"
+          class="w-full rounded-md border px-3 py-2 outline-none"
+          style="border-color:var(--brand-border);background:var(--brand-surface)"
         />
       </label>
-      <button type="submit" class="w-full rounded-md bg-sky-700 px-3 py-2 font-medium text-white hover:bg-sky-600">
+      <button type="submit" class="w-full rounded-md px-3 py-2 font-medium hover:opacity-90"
+        style="background:var(--brand-primary);color:var(--brand-primary-fg)">
         Sign in
       </button>
     </form>
   </div>`;
 }
 
-export function loginPage(error?: string): Html {
-  return layout("Sign in", loginBody(error));
+export function loginPage(brand: BrandConfig, error?: string): Html {
+  return layout("Sign in", loginBody(error), { brand, bare: true });
 }

@@ -34,11 +34,11 @@ function issueSession(c: Context, config: Config): void {
   });
 }
 
-async function handleLogin(c: Context, config: Config, audit: AuditWriter, limiter: RateLimiter) {
+async function handleLogin(c: Context<AppEnv>, config: Config, audit: AuditWriter, limiter: RateLimiter) {
   const ip = clientIp(c);
   if (!limiter.check(ip)) {
     audit.write({ actor: ip, action: "login_fail", detail: "rate_limited" });
-    return c.html(loginPage("Too many attempts. Try again later."), 429);
+    return c.html(loginPage(c.get("brand"), "Too many attempts. Try again later."), 429);
   }
   const token = (await c.req.parseBody())["token"];
   if (typeof token === "string" && tokenMatches(token, config.adminToken)) {
@@ -47,7 +47,7 @@ async function handleLogin(c: Context, config: Config, audit: AuditWriter, limit
     return c.redirect("/", 302);
   }
   audit.write({ actor: ip, action: "login_fail" });
-  return c.html(loginPage("Invalid token."), 401);
+  return c.html(loginPage(c.get("brand"), "Invalid token."), 401);
 }
 
 export function loginRoutes(config: Config, audit: AuditWriter): Hono<AppEnv> {
@@ -58,7 +58,7 @@ export function loginRoutes(config: Config, audit: AuditWriter): Hono<AppEnv> {
     if (verifySession(config.adminToken, getCookie(c, SESSION_COOKIE)) !== undefined) {
       return c.redirect("/", 302);
     }
-    return c.html(loginPage());
+    return c.html(loginPage(c.get("brand")));
   });
 
   router.post("/login", (c) => handleLogin(c, config, audit, limiter));

@@ -24,11 +24,12 @@ function networkChip(net: NetworkInfo): Html {
 }
 
 function portChip(p: PortInfo): Html {
-  const cls = p.published
-    ? "bg-sky-900/60 text-sky-300"
-    : "bg-slate-800 text-slate-300";
-  const title = p.published ? "published on host" : "internal only";
-  return html`<span title="${title}" class="mr-1 inline-block rounded px-1.5 py-0.5 text-xs ${cls}">${p.port}/tcp</span>`;
+  // Don't convey published/internal by colour alone (WCAG): published adds "↗".
+  if (p.published) {
+    return html`<span title="published on host" class="mr-1 inline-block rounded border px-1.5 py-0.5 text-xs"
+      style="color:var(--brand-accent);border-color:var(--brand-accent)">${p.port}/tcp ↗</span>`;
+  }
+  return html`<span title="internal only" class="mr-1 inline-block rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">${p.port}/tcp</span>`;
 }
 
 function cell<T>(items: readonly T[], empty: string, render: (x: T) => Html): Html {

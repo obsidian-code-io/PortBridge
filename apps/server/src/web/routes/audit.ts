@@ -11,7 +11,7 @@ export function auditRoutes(reader: AuditReader): Hono<AppEnv> {
   router.get("/audit", (c) => {
     const action = c.req.query("action");
     const filter = action !== undefined && action !== "" ? action : undefined;
-    return c.html(auditPage(reader.query(filter, AUDIT_LIMIT), filter, c.get("csrf")));
+    return c.html(auditPage(reader.query(filter, AUDIT_LIMIT), filter, c.get("brand"), c.get("csrf")));
   });
 
   return router;

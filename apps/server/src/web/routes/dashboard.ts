@@ -19,9 +19,9 @@ export function dashboardRoutes(docker: Docker): Hono<AppEnv> {
 
   router.get("/", async (c) => {
     try {
-      return c.html(dashboardPage(await listTargets(docker), c.get("csrf")));
+      return c.html(dashboardPage(await listTargets(docker), c.get("brand"), c.get("csrf")));
     } catch {
-      return c.html(dashboardPage([], c.get("csrf"), DOCKER_ERROR), 503);
+      return c.html(dashboardPage([], c.get("brand"), c.get("csrf"), DOCKER_ERROR), 503);
     }
   });
 

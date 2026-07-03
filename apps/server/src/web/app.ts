@@ -5,6 +5,7 @@ import type { AuditWriter } from "../audit/types.ts";
 import type { AppEnv } from "./env.ts";
 import type { AuditReader } from "../audit/types.ts";
 import { authGuard } from "../auth/middleware.ts";
+import { BrandStore } from "../brand/store.ts";
 import { TunnelRegistry } from "../agent/registry.ts";
 import { agentRoutes } from "../agent/routes.ts";
 import { loginRoutes } from "./routes/login.ts";
@@ -29,6 +30,13 @@ export function createApp(
 ): { app: Hono<AppEnv>; registry: TunnelRegistry } {
   const app = new Hono<AppEnv>();
   const registry = new TunnelRegistry(config.defaultTtlMinutes);
+  const brand = new BrandStore(config.dataDir);
+
+  // Make the brand config available to every rendered page (before first paint).
+  app.use("*", async (c, next) => {
+    c.set("brand", brand.get());
+    return next();
+  });
 
   app.get("/healthz", async (c) => {
     try {

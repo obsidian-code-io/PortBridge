@@ -81,7 +81,8 @@ export function forwardForm(target: Target): Html {
       I understand a "never" forward stays open until deleted
     </label>
     <button type="submit"
-      class="rounded bg-sky-700 px-3 py-1.5 font-medium text-white hover:bg-sky-600">
+      class="rounded px-3 py-1.5 font-medium hover:opacity-90"
+      style="background:var(--brand-primary);color:var(--brand-primary-fg)">
       Open forward
     </button>
   </form>`;
@@ -117,7 +118,7 @@ function extendControl(forward: Forward): Html {
       <option value="480">8h</option>
       <option value="1440">24h</option>
     </select>
-    <button class="text-xs text-sky-400 hover:text-sky-300">extend</button>
+    <button class="text-xs hover:opacity-80" style="color:var(--brand-accent)">extend</button>
   </form>`;
 }
 
