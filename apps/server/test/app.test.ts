@@ -1,10 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type Docker from "dockerode";
 import type { Config } from "../src/config.ts";
 import type { AuditEvent, AuditReader, AuditWriter } from "../src/audit/types.ts";
 import { createApp } from "../src/web/app.ts";
+import { BrandStore } from "../src/brand/store.ts";
 
 const TOKEN = "0123456789abcdef0123";
+const DATA_DIR = mkdtempSync(join(tmpdir(), "pb-app-"));
+afterAll(() => rmSync(DATA_DIR, { recursive: true, force: true }));
 
 const CONFIG: Config = {
   adminToken: TOKEN,
@@ -14,8 +20,11 @@ const CONFIG: Config = {
   maxForwards: 50,
   socatImage: "alpine/socat:test",
   dockerHost: undefined,
-  dataDir: "/tmp",
+  dataDir: DATA_DIR,
 };
+
+// These tests exercise auth/forwards, not onboarding — treat the app as onboarded.
+new BrandStore(DATA_DIR).setOnboarding({ onboarded: true });
 
 function fakeDocker() {
   return {
