@@ -48,6 +48,6 @@ function dashboardBody(targets: readonly Target[], error: string | undefined): H
   </section>`;
 }
 
-export function dashboardPage(targets: readonly Target[], error?: string): Html {
-  return layout("Dashboard", dashboardBody(targets, error));
+export function dashboardPage(targets: readonly Target[], csrf: string, error?: string): Html {
+  return layout("Dashboard", dashboardBody(targets, error), csrf);
 }

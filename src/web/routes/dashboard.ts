@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type Docker from "dockerode";
+import type { AppEnv } from "../env.ts";
 import { listTargets, type Target } from "../../docker/containers.ts";
 import { dashboardPage } from "../views/dashboard.ts";
 import { targetsTable, errorBanner } from "../views/targets.ts";
@@ -13,14 +14,14 @@ function filterTargets(targets: readonly Target[], query: string): Target[] {
   );
 }
 
-export function dashboardRoutes(docker: Docker): Hono {
-  const router = new Hono();
+export function dashboardRoutes(docker: Docker): Hono<AppEnv> {
+  const router = new Hono<AppEnv>();
 
   router.get("/", async (c) => {
     try {
-      return c.html(dashboardPage(await listTargets(docker)));
+      return c.html(dashboardPage(await listTargets(docker), c.get("csrf")));
     } catch {
-      return c.html(dashboardPage([], DOCKER_ERROR), 503);
+      return c.html(dashboardPage([], c.get("csrf"), DOCKER_ERROR), 503);
     }
   });
 

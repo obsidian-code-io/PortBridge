@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type Docker from "dockerode";
 import type { Config } from "../../config.ts";
+import type { AppEnv } from "../env.ts";
 import type { CreateForwardInput } from "../../docker/forward-types.ts";
 import { listTargets } from "../../docker/containers.ts";
 import { createForward, deleteForward, extendForward, listForwards } from "../../docker/forwards.ts";
@@ -64,8 +65,8 @@ async function handleCreate(docker: Docker, config: Config, c: Context) {
   }
 }
 
-export function forwardRoutes(docker: Docker, config: Config): Hono {
-  const router = new Hono();
+export function forwardRoutes(docker: Docker, config: Config): Hono<AppEnv> {
+  const router = new Hono<AppEnv>();
 
   router.get("/forwards/panel", (c) => c.html(""));
 
