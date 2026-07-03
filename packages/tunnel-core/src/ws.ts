@@ -6,6 +6,11 @@
 
 import { WebSocket, type RawData } from "ws";
 
+/** An error surfaced by the WS; `status` is set when the HTTP upgrade was rejected. */
+export interface WsError extends Error {
+  status?: number;
+}
+
 export interface WsClient {
   send(data: string | Uint8Array): void;
   close(code?: number, reason?: string): void;
@@ -15,7 +20,7 @@ export interface WsClient {
   onText(cb: (text: string) => void): void;
   onBinary(cb: (data: Uint8Array) => void): void;
   onClose(cb: (code: number, reason: string) => void): void;
-  onError(cb: (err: Error) => void): void;
+  onError(cb: (err: WsError) => void): void;
 }
 
 function toUint8(data: RawData): Uint8Array {
@@ -28,14 +33,26 @@ export function connectWs(httpUrl: string, headers?: Record<string, string>): Ws
   const wsUrl = httpUrl.replace(/^http/, "ws");
   const ws = new WebSocket(wsUrl, headers ? { headers } : undefined);
   ws.binaryType = "nodebuffer";
+  let errCb: (err: WsError) => void = () => undefined;
+  ws.on("error", (err: Error) => errCb(err));
+  // A rejected upgrade (e.g. 401/403) surfaces here with the HTTP status; the
+  // control connection uses it to fail closed instead of reconnecting forever.
+  ws.on("unexpected-response", (_req, res: { statusCode?: number; resume: () => void }) => {
+    res.resume();
+    errCb(Object.assign(new Error(`unexpected server response ${res.statusCode ?? "?"}`), { status: res.statusCode }));
+  });
   return {
-    send: (data) => ws.send(data),
+    send: (data) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    },
     close: (code, reason) => ws.close(code, reason),
     buffered: () => ws.bufferedAmount,
     onOpen: (cb) => ws.on("open", cb),
     onText: (cb) => ws.on("message", (d: RawData, isBinary: boolean) => (isBinary ? undefined : cb(d.toString()))),
     onBinary: (cb) => ws.on("message", (d: RawData, isBinary: boolean) => (isBinary ? cb(toUint8(d)) : undefined)),
     onClose: (cb) => ws.on("close", (code: number, reason: Buffer) => cb(code, reason.toString())),
-    onError: (cb) => ws.on("error", cb),
+    onError: (cb) => {
+      errCb = cb;
+    },
   };
 }

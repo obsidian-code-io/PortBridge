@@ -16,8 +16,8 @@ interface RawStdin {
   resume: () => void;
   pause: () => void;
   setEncoding: (enc: string) => void;
-  on: (event: "data", cb: (chunk: string) => void) => void;
-  removeListener: (event: "data", cb: (chunk: string) => void) => void;
+  on: (event: "data" | "end" | "error", cb: (chunk?: unknown) => void) => void;
+  removeListener: (event: "data" | "end" | "error", cb: (chunk?: unknown) => void) => void;
 }
 
 export function promptHidden(question: string): Promise<string> {
@@ -25,18 +25,25 @@ export function promptHidden(question: string): Promise<string> {
   process.stdout.write(question);
   return new Promise((resolve) => {
     let value = "";
+    let settled = false;
     const done = (): void => {
+      if (settled) return;
+      settled = true;
       stdin.setRawMode?.(false);
       stdin.pause();
       stdin.removeListener("data", onData);
+      stdin.removeListener("end", done);
+      stdin.removeListener("error", done);
       process.stdout.write("\n");
       resolve(value);
     };
-    const onData = (chunk: string): void => {
-      for (const ch of chunk) {
+    const onData = (chunk?: unknown): void => {
+      for (const ch of String(chunk)) {
         if (ch === CR || ch === LF || ch === EOT) return done();
-        if (ch === ETX) process.exit(1);
-        else if (ch === DEL || ch === BS) value = value.slice(0, -1);
+        if (ch === ETX) {
+          stdin.setRawMode?.(false);
+          process.exit(130); // Ctrl-C — restore the terminal first
+        } else if (ch === DEL || ch === BS) value = value.slice(0, -1);
         else value += ch;
       }
     };
@@ -44,5 +51,7 @@ export function promptHidden(question: string): Promise<string> {
     stdin.resume();
     stdin.setEncoding("utf8");
     stdin.on("data", onData);
+    stdin.on("end", done); // piped input that closes without a newline
+    stdin.on("error", done);
   });
 }

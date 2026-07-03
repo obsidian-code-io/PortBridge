@@ -59,8 +59,19 @@ export function clearConfig(): void {
   if (existsSync(configPath())) rmSync(configPath());
 }
 
-function stripSlash(url: string): string {
-  return url.replace(/\/+$/, "");
+/** Validate + canonicalize a server URL. Requires an explicit http(s) scheme. */
+export function normalizeUrl(input: string): string {
+  const trimmed = input.trim().replace(/\/+$/, "");
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new CliError(`Invalid server URL "${input}". Include the scheme, e.g. https://portbridge.example.com`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new CliError(`Server URL must start with http:// or https:// (got "${parsed.protocol}//").`);
+  }
+  return trimmed;
 }
 
 export function resolveUrl(flag?: string): string {
@@ -68,7 +79,7 @@ export function resolveUrl(flag?: string): string {
   if (url === undefined || url === "") {
     throw new CliError("No server URL. Set one: `portbridge config set-url <url>`, $PORTBRIDGE_URL, or --url.");
   }
-  return stripSlash(url);
+  return normalizeUrl(url);
 }
 
 export function resolveToken(): string {

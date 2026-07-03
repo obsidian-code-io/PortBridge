@@ -26,9 +26,26 @@ export interface PortBridgeClient {
 }
 
 async function getJson<T>(url: string, token: string): Promise<T> {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`GET ${url} → ${res.status} ${res.statusText}`);
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`could not reach ${originOf(url)} — is the URL correct and the server running? (${detail})`);
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`unauthorized (HTTP ${res.status}) — check the server URL and admin token`);
+  }
+  if (!res.ok) throw new Error(`request to ${url} failed: ${res.status} ${res.statusText}`);
   return (await res.json()) as T;
+}
+
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
 }
 
 class PortBridgeClientImpl implements PortBridgeClient {
@@ -51,10 +68,15 @@ class PortBridgeClientImpl implements PortBridgeClient {
   }
 
   async openTunnel(spec: OpenTunnelSpec): Promise<Tunnel> {
-    await this.control.ensureConnected();
+    await this.control.ensureConnected(); // rejects fast on bad URL/token — no hang
     const tunnel = new Tunnel(spec, this.control, (f, t, s) => this.openStream(f, t, s), (t) => this.tunnels.delete(t));
     this.tunnels.add(tunnel);
-    await tunnel.activate();
+    try {
+      await tunnel.activate();
+    } catch (err) {
+      this.tunnels.delete(tunnel); // don't leave a half-open tunnel to be re-asserted
+      throw err;
+    }
     return tunnel;
   }
 

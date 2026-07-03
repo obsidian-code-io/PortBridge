@@ -7,12 +7,13 @@ import { type AddressInfo } from "node:net";
 import {
   clearConfig,
   configPath,
+  normalizeUrl,
   readConfig,
   resolveToken,
   resolveUrl,
   writeConfig,
 } from "../src/config.ts";
-import { cmdConfig, cmdLs, cmdTargets } from "../src/commands.ts";
+import { cmdConfig, cmdLs, cmdTargets, cmdTunnel } from "../src/commands.ts";
 
 let home: string;
 let savedHome: string | undefined;
@@ -66,6 +67,30 @@ describe("config storage", () => {
     const out = await captureLog(() => cmdConfig("show"));
     expect(out).toContain("token:    set");
     expect(out).not.toContain("supersecret");
+  });
+});
+
+describe("input validation (first-run footguns)", () => {
+  test("normalizeUrl requires an http(s) scheme and strips trailing slashes", () => {
+    expect(normalizeUrl("https://pb.example.com/")).toBe("https://pb.example.com");
+    expect(normalizeUrl("http://localhost:8080")).toBe("http://localhost:8080");
+    expect(() => normalizeUrl("portbridge.example.com")).toThrow(/scheme|invalid/i);
+    expect(() => normalizeUrl("ftp://pb.example.com")).toThrow(/http/i);
+  });
+
+  test("config set-url rejects a URL without a scheme", () => {
+    expect(() => cmdConfig("set-url", "pb.example.com")).toThrow(/scheme|invalid/i);
+  });
+
+  test("tunnel rejects a non-numeric / out-of-range port before touching the network", async () => {
+    await expect(cmdTunnel("web", "abc", {})).rejects.toThrow(/port/i);
+    await expect(cmdTunnel("web", "0", {})).rejects.toThrow(/port/i);
+    await expect(cmdTunnel("web", "70000", {})).rejects.toThrow(/port/i);
+  });
+
+  test("tunnel rejects a bad --ttl and --local", async () => {
+    await expect(cmdTunnel("web", "5432", { ttl: "soon" })).rejects.toThrow(/ttl/i);
+    await expect(cmdTunnel("web", "5432", { local: "-1" })).rejects.toThrow(/local/i);
   });
 });
 

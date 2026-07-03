@@ -27,7 +27,7 @@ cli
   .option("--ttl <minutes>", "TTL in minutes, or 'never'")
   .option("--url <url>", "Server URL")
   .action((target: string, port: string, opts: { local?: string; ttl?: string; url?: string }) =>
-    cmdTunnel(target, Number(port), opts),
+    cmdTunnel(target, port, opts),
   );
 
 cli
@@ -38,16 +38,27 @@ cli
 cli.help();
 cli.version("0.1.0");
 
+const FIRST_RUN = [
+  "",
+  "First run? Point the CLI at your server, log in, then list targets:",
+  "  portbridge config set-url https://portbridge.example.com",
+  "  portbridge login",
+  "  portbridge targets",
+].join("\n");
+
 async function main(): Promise<void> {
   try {
-    cli.parse(process.argv, { run: false });
+    const parsed = cli.parse(process.argv, { run: false });
+    if (parsed.options["help"] === true || parsed.options["version"] === true) return;
+    if (cli.matchedCommand === undefined) {
+      cli.outputHelp();
+      const unknown = process.argv.length > 2;
+      console.error(unknown ? "\nUnknown command — see the usage above." : FIRST_RUN);
+      process.exit(unknown ? 1 : 0);
+    }
     await cli.runMatchedCommand();
   } catch (err) {
-    if (err instanceof CliError) {
-      console.error(err.message);
-      process.exit(1);
-    }
-    console.error(err instanceof Error ? err.message : err);
+    console.error(err instanceof CliError ? err.message : err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 }

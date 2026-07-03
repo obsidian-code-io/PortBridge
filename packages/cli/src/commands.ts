@@ -8,6 +8,7 @@ import {
   CliError,
   clearConfig,
   configPath,
+  normalizeUrl,
   readConfig,
   resolveToken,
   resolveUrl,
@@ -23,7 +24,7 @@ export interface UrlOpts {
 export function cmdConfig(action: string, value?: string): void {
   if (action === "set-url") {
     if (value === undefined) throw new CliError("Usage: portbridge config set-url <url>");
-    writeConfig({ ...readConfig(), url: value.replace(/\/+$/, "") });
+    writeConfig({ ...readConfig(), url: normalizeUrl(value) });
     console.log(`Saved server URL to ${configPath()}`);
     return;
   }
@@ -74,20 +75,37 @@ export interface TunnelOpts extends UrlOpts {
   ttl?: string;
 }
 
-function parseTtl(ttl: string | undefined): number | "never" | undefined {
-  if (ttl === undefined) return undefined;
-  return ttl === "never" ? "never" : Number(ttl);
+function parsePort(value: string, label: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    throw new CliError(`${label} must be a port between 1 and 65535 (got "${value}").`);
+  }
+  return n;
 }
 
-export async function cmdTunnel(target: string, port: number, opts: TunnelOpts): Promise<void> {
+function parseTtl(ttl: string | undefined): number | "never" | undefined {
+  if (ttl === undefined) return undefined;
+  if (ttl === "never") return "never";
+  const n = Number(ttl);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new CliError(`--ttl must be a positive integer (minutes) or "never" (got "${ttl}").`);
+  }
+  return n;
+}
+
+export async function cmdTunnel(target: string, portArg: string, opts: TunnelOpts): Promise<void> {
+  if (target === undefined || target === "") throw new CliError("Usage: portbridge tunnel <target> <port>");
+  const targetPort = parsePort(portArg, "<port>");
+  const localPort = opts.local === undefined ? undefined : parsePort(opts.local, "--local");
+  const ttlMinutes = parseTtl(opts.ttl);
   const client = createClient({ url: resolveUrl(opts.url), token: resolveToken() });
-  const tunnel = await client.openTunnel({
-    targetId: target,
-    targetPort: port,
-    localPort: opts.local === undefined ? undefined : Number(opts.local),
-    ttlMinutes: parseTtl(opts.ttl),
-  });
-  holdTunnel(tunnel, client, target, port);
+  try {
+    const tunnel = await client.openTunnel({ targetId: target, targetPort, localPort, ttlMinutes });
+    holdTunnel(tunnel, client, target, targetPort);
+  } catch (err) {
+    client.close();
+    throw new CliError(`Could not open tunnel: ${err instanceof Error ? err.message : err}`);
+  }
 }
 
 function holdTunnel(tunnel: Tunnel, client: { close: () => void }, target: string, port: number): void {
