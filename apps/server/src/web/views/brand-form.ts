@@ -2,7 +2,7 @@ import { html } from "hono/html";
 import type { Html } from "./html.ts";
 import { FONT_ALLOWLIST, type BrandConfig } from "../../brand/types.ts";
 
-const INPUT = "w-full rounded-md border px-3 py-2 text-sm outline-none";
+const INPUT = "w-full rounded-md border px-3 py-2 text-sm";
 const INPUT_STYLE = "border-color:var(--brand-border);background:var(--brand-surface);min-height:44px";
 
 interface FieldOpts {

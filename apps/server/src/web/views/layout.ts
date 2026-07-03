@@ -8,6 +8,14 @@ import { brandStyleCss } from "../../brand/tokens.ts";
 const TAILWIND_CDN = "https://cdn.tailwindcss.com";
 const HTMX_CDN = "https://unpkg.com/htmx.org@2.0.3";
 
+// Base a11y: always-visible keyboard focus (WCAG 2.4.7), reduced-motion respect,
+// and bidi isolation so LTR technical content (commands, host:port, ids) keeps
+// its character order and doesn't reorder inside an RTL layout.
+const BASE_CSS =
+  "*:focus-visible{outline:2px solid var(--brand-accent);outline-offset:2px;border-radius:3px}" +
+  "@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}" +
+  "code,pre{direction:ltr;unicode-bidi:isolate}.font-mono{unicode-bidi:isolate}";
+
 export interface LayoutOpts {
   readonly brand: BrandConfig;
   readonly csrf?: string; // present ⇒ authenticated (hx-headers + app nav)
@@ -25,8 +33,9 @@ function nav(opts: LayoutOpts): Html {
   if (opts.bare === true || opts.csrf === undefined) {
     return html`<span class="text-xs" style="color:var(--brand-muted)">${opts.brand.tagline}</span>`;
   }
-  const link = "text-xs hover:opacity-80";
-  return html`<div class="flex items-center gap-3" style="color:var(--brand-muted)">
+  // inline-flex + py padding keeps each hit target ≥24px tall (WCAG 2.5.8 AA).
+  const link = "inline-flex items-center px-1.5 py-2 text-xs hover:opacity-80";
+  return html`<div class="flex items-center gap-2" style="color:var(--brand-muted)">
     <a href="/" class="${link}">dashboard</a>
     <a href="/audit" class="${link}">audit</a>
     <a href="/settings" class="${link}">settings</a>
@@ -46,6 +55,7 @@ export function layout(title: string, body: Html, opts: LayoutOpts): Html {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title} · ${brand.productName}</title>
     <style>${raw(brandStyleCss(brand))}</style>
+    <style>${raw(BASE_CSS)}</style>
     ${raw(favicon)}
     <script src="${TAILWIND_CDN}"></script>
     <script src="${HTMX_CDN}"></script>

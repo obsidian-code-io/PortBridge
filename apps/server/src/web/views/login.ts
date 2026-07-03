@@ -17,8 +17,8 @@ function loginBody(error: string | undefined): Html {
           name="token"
           autocomplete="current-password"
           required
-          class="w-full rounded-md border px-3 py-2 outline-none"
-          style="border-color:var(--brand-border);background:var(--brand-surface)"
+          class="w-full rounded-md border px-3 py-2"
+          style="border-color:var(--brand-border);background:var(--brand-surface);min-height:44px"
         />
       </label>
       <button type="submit" class="w-full rounded-md px-3 py-2 font-medium hover:opacity-90"

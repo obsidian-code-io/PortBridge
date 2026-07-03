@@ -48,7 +48,7 @@ export function onboardingFragment(brand: BrandConfig, step: number, error?: str
         <button name="action" value="skip" type="submit"
           class="rounded-md px-3 py-2 text-sm hover:opacity-80"
           style="color:var(--brand-muted);min-height:44px">Skip</button>
-        <a href="/settings" class="text-sm hover:opacity-80" style="color:var(--brand-accent)">set up later in Settings</a>
+        <a href="/settings" class="inline-flex items-center px-1 py-2 text-sm hover:opacity-80" style="color:var(--brand-accent)">set up later in Settings</a>
       </div>
     </form>
   </div>`;
