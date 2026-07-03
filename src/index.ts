@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import { loadConfig, ConfigError, type Config } from "./config.ts";
 import { getDocker } from "./docker/client.ts";
+import { dashboardRoutes } from "./web/routes/dashboard.ts";
 
 function loadConfigOrExit(): Config {
   try {
@@ -31,6 +32,9 @@ app.get("/healthz", async (c) => {
     return c.json({ ok: false }, 503);
   }
 });
+
+// Dashboard + HTMX target search. (Auth guard lands in Phase 4.)
+app.route("/", dashboardRoutes(docker));
 
 console.info(`[portbridge] listening on :${config.port}`);
 
