@@ -1,0 +1,42 @@
+name: release-npm
+
+# Build and publish the client packages to npm on a version tag (e.g. v0.1.0).
+# The GHCR server image is published by release.yml.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: bun install --frozen-lockfile
+
+      - name: Authenticate to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
+      # Publish in dependency order. For each package: emit dist/ (tsc rewrites
+      # .ts import specifiers to .js), point the entry fields at dist, then
+      # publish. `bun publish` replaces workspace:* deps with real versions.
+      - name: Build and publish protocol → tunnel-core → cli
+        run: |
+          set -euo pipefail
+          for pkg in protocol tunnel-core cli; do
+            pushd "packages/$pkg"
+            bun run build
+            npm pkg set main=dist/index.js types=dist/index.d.ts
+            npm pkg set exports=./dist/index.js
+            if [ "$pkg" = "cli" ]; then npm pkg set bin.portbridge=dist/bin.js; fi
+            bun publish --access public
+            popd
+          done

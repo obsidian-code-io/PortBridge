@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { cac } from "cac";
 import { CliError } from "./config.ts";
 import { cmdConfig, cmdLogin, cmdLogout, cmdLs, cmdTargets, cmdTunnel } from "./commands.ts";

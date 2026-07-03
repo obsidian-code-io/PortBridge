@@ -23,13 +23,74 @@ short-lived `alpine/socat` sidecar containers, not an in-process proxy.
 - **Sidecars, not a proxy.** Each forward is a pinned `alpine/socat` container
   (`TCP-LISTEN` → `TCP-CONNECT`) with a published host port, 32 MB / 0.1 CPU,
   `CapDrop: ALL`, `restart: unless-stopped`.
+- **Two forward kinds.** `tcp` (above) exposes a port on the *cloud host's*
+  public IP — right for sharing a service with a teammate/CI. `agent-tunnel`
+  (below) is the reverse: a laptop dials **out** and binds a local port that
+  tunnels to a cloud container — right for "reach my cloud container from my
+  laptop," with no inbound public port opened.
 - **Fail closed.** Invalid config aborts boot. Every route except `/login` and
   `/healthz` (and `/public/*`) requires a valid session. Deny by default.
 
+## Reach a cloud container from your laptop (agent-tunnel)
+
+The `@obsidiancode/portbridge-cli` (a thin wrapper over the
+`@obsidiancode/portbridge-tunnel` library) dials an **outbound WSS** to the
+PortBridge server and opens `localhost:<port>` on your laptop that tunnels to a
+cloud container's internal port — same model as VSCode Dev Tunnels / ngrok /
+chisel. The server never opens an inbound public port; everything rides Traefik
+on 443.
+
+```bash
+npx @obsidiancode/portbridge-cli config set-url https://portbridge.example.com
+npx @obsidiancode/portbridge-cli login          # paste the admin token (not echoed; stored 0600)
+npx @obsidiancode/portbridge-cli targets        # list forwardable containers
+npx @obsidiancode/portbridge-cli tunnel <container-id> 5432 --local 5432
+#   → localhost:5432  →  <container-id>:5432   (Ctrl-C to close)
+psql -h localhost -p 5432 -U postgres
+npx @obsidiancode/portbridge-cli ls             # active tunnels
+```
+
+URL resolution: `--url` flag → `PORTBRIDGE_URL` → `config.json`. The agent-tunnel
+also appears in the web UI's forwards table (a **via agent** badge, no host:port)
+with a **Kill** button.
+
+**Security invariants**
+
+- **Control channel is browser-unreachable.** `GET /agent/control` authenticates
+  with an `Authorization: Bearer <ADMIN_TOKEN>` **header**; browsers can't set
+  custom headers on a WS upgrade, and we additionally reject upgrades carrying an
+  `Origin`. Failed auth is rate-limited per-IP with a non-spoofable global backstop.
+- **Per-tunnel stream tokens.** Each tunnel gets a crypto-random token; data WSs
+  authenticate with it (constant-time), so killing a tunnel instantly invalidates
+  all its streams. The admin token never rides the data channel.
+- **SSRF guard.** The client sends a `targetId` (never a raw host:port); the
+  server resolves it through the Docker socket, so a client can only reach
+  containers Docker confirms — never an arbitrary internal address.
+- **TTL by default; shared MAX_FORWARDS.** Tunnels expire (reaper) like tcp
+  forwards, and the cap is shared across sidecars + tunnels (enforced atomically).
+- **In-memory state.** An agent-tunnel is a live WebSocket, not a sidecar — its
+  state lives only in the server's registry and dies on disconnect or restart;
+  the CLI transparently reconnects (exponential backoff + jitter) and re-opens.
+
+**Cross-network boundary (known limitation).** The server can pipe bytes to a
+target only when it **shares a Docker network** with it (direct dial). If the
+target is on a network PortBridge isn't attached to, `open` fails with a
+`TargetUnreachableError` telling you to attach it
+(`docker network connect <network> portbridge`) or use a TCP forward instead. A
+relay-sidecar bridge for the cross-network case is intentionally out of scope for
+this milestone.
+
+**Distribution.** `npx @obsidiancode/portbridge-cli …`, or build a single
+self-contained binary for non-Node users with `bun build --compile`. Packages
+publish to npm from the `release-npm` workflow on a `v*` tag.
+
 ## Stack
 
-Bun · Hono · HTMX + server-rendered templates + Tailwind · dockerode ·
-`bun:sqlite` · UUIDv7.
+**Server** (`apps/server`): Bun · Hono · HTMX + server-rendered templates +
+Tailwind · dockerode · `bun:sqlite` · UUIDv7 · WS via `createBunWebSocket`.
+**Client** (`packages/tunnel-core` + `packages/cli`): TypeScript, runs under Bun
+and Node, WS via the `ws` package, `cac` for the CLI. **Shared**
+(`packages/protocol`): wire types + token/codec. Bun workspace monorepo.
 
 ## Configuration (env)
 
