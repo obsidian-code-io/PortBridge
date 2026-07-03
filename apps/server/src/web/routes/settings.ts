@@ -5,7 +5,7 @@ import { BrandStore, BrandValidationError } from "../../brand/store.ts";
 import { settingsForm, settingsPage } from "../views/settings.ts";
 
 const EDITABLE = [
-  "productName", "tagline", "logoDark", "icon", "primary",
+  "productName", "tagline", "logoDark", "icon", "background", "primary",
   "fontFamily", "supportEmail", "supportUrl", "locale", "dir",
 ] as const;
 

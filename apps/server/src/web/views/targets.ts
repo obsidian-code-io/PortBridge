@@ -1,26 +1,19 @@
 import { html } from "hono/html";
 import type { Target, PortInfo, NetworkInfo } from "../../docker/containers.ts";
 import type { Html } from "./html.ts";
-
-const EMPTY_BOX =
-  "rounded-md border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400";
+import { S_BOX, S_CHIP, S_CHIP_MUTED, S_DANGER, S_FG, S_MUTED, S_OK, S_BORDER } from "./styles.ts";
 
 export function errorBanner(message: string): Html {
-  return html`<div class="rounded-md border border-red-900 bg-red-950/60 px-4 py-4 text-sm text-red-300">
-    ${message}
-  </div>`;
+  return html`<div class="rounded-md border px-4 py-4 text-sm" style="${S_DANGER}">${message}</div>`;
 }
 
 function stateBadge(state: string): Html {
-  const cls =
-    state === "running"
-      ? "bg-emerald-900/60 text-emerald-300"
-      : "bg-slate-800 text-slate-400";
-  return html`<span class="rounded px-2 py-0.5 text-xs ${cls}">${state}</span>`;
+  const style = state === "running" ? S_OK : S_CHIP_MUTED;
+  return html`<span class="rounded px-2 py-0.5 text-xs" style="${style}">${state}</span>`;
 }
 
 function networkChip(net: NetworkInfo): Html {
-  return html`<span class="mr-1 inline-block rounded bg-slate-800 px-1.5 py-0.5 text-xs">${net.name}</span>`;
+  return html`<span class="mr-1 inline-block rounded px-1.5 py-0.5 text-xs" style="${S_CHIP}">${net.name}</span>`;
 }
 
 function portChip(p: PortInfo): Html {
@@ -29,17 +22,18 @@ function portChip(p: PortInfo): Html {
     return html`<span title="published on host" class="mr-1 inline-block rounded border px-1.5 py-0.5 text-xs"
       style="color:var(--brand-accent);border-color:var(--brand-accent)">${p.port}/tcp ↗</span>`;
   }
-  return html`<span title="internal only" class="mr-1 inline-block rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">${p.port}/tcp</span>`;
+  return html`<span title="internal only" class="mr-1 inline-block rounded px-1.5 py-0.5 text-xs" style="${S_CHIP}">${p.port}/tcp</span>`;
 }
 
 function cell<T>(items: readonly T[], empty: string, render: (x: T) => Html): Html {
-  if (items.length === 0) return html`<span class="text-slate-600">${empty}</span>`;
+  if (items.length === 0) return html`<span style="${S_MUTED}">${empty}</span>`;
   return html`${items.map(render)}`;
 }
 
 function forwardAction(target: Target): Html {
   return html`<button
-    class="rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
+    class="rounded px-2 py-1 text-xs hover:opacity-80"
+    style="${S_CHIP}"
     hx-get="/forwards/new?target=${target.id}"
     hx-target="#panel"
     hx-swap="innerHTML"
@@ -47,11 +41,11 @@ function forwardAction(target: Target): Html {
 }
 
 function targetRow(target: Target): Html {
-  return html`<tr class="border-b border-slate-900 hover:bg-slate-900/40">
+  return html`<tr class="pb-row border-b" style="${S_BORDER}">
     <td class="py-2 pr-4 font-mono">${target.name}</td>
-    <td class="py-2 pr-4 text-slate-300">${target.image}</td>
+    <td class="py-2 pr-4" style="${S_FG}">${target.image}</td>
     <td class="py-2 pr-4">${stateBadge(target.state)}</td>
-    <td class="py-2 pr-4 text-slate-300">${cell(target.networks, "—", networkChip)}</td>
+    <td class="py-2 pr-4" style="${S_FG}">${cell(target.networks, "—", networkChip)}</td>
     <td class="py-2 pr-4">${cell(target.ports, "none exposed", portChip)}</td>
     <td class="py-2 text-right">${forwardAction(target)}</td>
   </tr>`;
@@ -59,11 +53,11 @@ function targetRow(target: Target): Html {
 
 export function targetsTable(targets: readonly Target[]): Html {
   if (targets.length === 0) {
-    return html`<div class="${EMPTY_BOX}">No matching containers.</div>`;
+    return html`<div class="rounded-md border px-4 py-6 text-sm" style="${S_BOX}">No matching containers.</div>`;
   }
   return html`<table class="w-full border-collapse text-sm">
     <thead>
-      <tr class="border-b border-slate-800 text-left text-slate-400">
+      <tr class="border-b text-left" style="${S_BORDER};${S_MUTED}">
         <th class="py-2 pr-4 font-medium">Name</th>
         <th class="py-2 pr-4 font-medium">Image</th>
         <th class="py-2 pr-4 font-medium">State</th>

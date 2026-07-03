@@ -16,7 +16,8 @@ export interface BrandConfig {
   logoLight: string; // logo.logoLight — asset URL ("" = use product name text)
   logoDark: string; // logo.logoDark
   icon: string; // logo.icon (favicon)
-  primary: string; // color.primary (hex) — other tokens derived from it
+  background: string; // color.background (hex) — the base the neutral palette derives from
+  primary: string; // color.primary (hex) — brand/accent tokens derived from it
   fontFamily: string; // type.fontFamily — allowlist key
   supportEmail: string; // contact.supportEmail
   supportUrl: string; // contact.supportUrl
@@ -41,7 +42,8 @@ export const BRAND_DEFAULTS: BrandConfig = {
   logoLight: "",
   logoDark: "",
   icon: "",
-  primary: "#38bdf8", // sky-400: high-contrast accent on the dark chrome, black-readable as a fill
+  background: "#ffffff", // white — clean monochrome default; neutrals derive from it
+  primary: "#000000", // black — the default accent/fill on white
   fontFamily: "system",
   supportEmail: "",
   supportUrl: "",

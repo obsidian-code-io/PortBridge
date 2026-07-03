@@ -68,6 +68,7 @@ export function basicsFields(b: BrandConfig): Html {
 
 export function brandingFields(b: BrandConfig): Html {
   return html`<div class="space-y-3">
+    ${colorField("background", "Background colour", b.background)}
     ${colorField("primary", "Primary colour", b.primary)}
     ${field("logoDark", "Logo URL", b.logoDark, { type: "url", placeholder: "https://…/logo.svg", hint: "Leave blank to use the product name." })}
     ${field("tagline", "Tagline", b.tagline)}

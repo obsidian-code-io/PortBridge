@@ -29,7 +29,7 @@ function managedForwardsSection(): Html {
     hx-trigger="load, forwardsChanged from:body"
     hx-swap="innerHTML"
   >
-    <div class="text-sm text-slate-500">Loading forwards…</div>
+    <div class="text-sm" style="color:var(--brand-muted)">Loading forwards…</div>
   </div>`;
 }
 

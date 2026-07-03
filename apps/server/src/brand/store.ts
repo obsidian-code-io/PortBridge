@@ -11,7 +11,6 @@ import { join } from "node:path";
 import { contrastRatio, parseHex, readableFg } from "./contrast.ts";
 import { BRAND_DEFAULTS, FONT_ALLOWLIST, type BrandConfig, type BrandInput } from "./types.ts";
 
-const BG = "#020617";
 const AA_UI = 3; // primary must be distinguishable from the background
 const AA_TEXT = 4.5; // a readable label must exist on a primary fill
 
@@ -22,14 +21,17 @@ export class BrandValidationError extends Error {
   }
 }
 
-/** Returns human-readable issues; empty array = valid. */
-export function validateBrand(input: BrandInput): string[] {
+/** Returns human-readable issues; empty array = valid. `bg` is the effective background. */
+export function validateBrand(input: BrandInput, bg: string = BRAND_DEFAULTS.background): string[] {
   const issues: string[] = [];
+  if (input.background !== undefined && parseHex(input.background) === undefined) {
+    issues.push(`Background colour "${input.background}" is not a valid hex colour.`);
+  }
   if (input.primary !== undefined) {
     if (parseHex(input.primary) === undefined) {
       issues.push(`Primary colour "${input.primary}" is not a valid hex colour.`);
     } else {
-      if (contrastRatio(input.primary, BG) < AA_UI) {
+      if (contrastRatio(input.primary, bg) < AA_UI) {
         issues.push(`Primary colour is too low-contrast against the background (needs ≥ ${AA_UI}:1).`);
       }
       const fgRatio = contrastRatio(input.primary, readableFg(input.primary));
@@ -89,7 +91,8 @@ export class BrandStore {
 
   /** Save editable brand fields (validated). Throws BrandValidationError. */
   save(input: BrandInput): BrandConfig {
-    const issues = validateBrand(input);
+    const bg = input.background ?? this.cache.background;
+    const issues = validateBrand(input, bg);
     if (issues.length > 0) throw new BrandValidationError(issues);
     return this.persist(merge(this.cache, input));
   }

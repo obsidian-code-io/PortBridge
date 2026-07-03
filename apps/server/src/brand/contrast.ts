@@ -52,18 +52,27 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
   return { r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t };
 }
 
+/** Linear blend of two hex colours; `t` in [0,1] moves `a` toward `b`. */
+export function blend(a: string, b: string, t: number): string {
+  const ra = parseHex(a);
+  const rb = parseHex(b);
+  if (ra === undefined || rb === undefined) return a;
+  return toHex(mix(ra, rb, t));
+}
+
 /**
- * Return `color` if it already meets `minRatio` against `bg`, otherwise lighten
- * it toward white until it does (so a legit-but-dim brand colour still yields an
- * accessible text/accent token instead of being rejected outright).
+ * Return `color` if it already meets `minRatio` against `bg`, otherwise step it
+ * toward whichever of black/white is readable on `bg` until it does. Works for
+ * light and dark backgrounds alike, so a legit-but-dim brand colour still yields
+ * an accessible text/accent token instead of being rejected outright.
  */
-export function ensureAccessible(color: string, bg: string, minRatio: number): string {
+export function ensureReadable(color: string, bg: string, minRatio: number): string {
   const rgb = parseHex(color);
   if (rgb === undefined) return color;
-  const white: Rgb = { r: 255, g: 255, b: 255 };
+  const target = parseHex(readableFg(bg)) ?? { r: 255, g: 255, b: 255 };
   for (let t = 0; t <= 1.0001; t += 0.05) {
-    const candidate = toHex(mix(rgb, white, t));
+    const candidate = toHex(mix(rgb, target, t));
     if (contrastRatio(candidate, bg) >= minRatio) return candidate;
   }
-  return "#ffffff";
+  return readableFg(bg);
 }

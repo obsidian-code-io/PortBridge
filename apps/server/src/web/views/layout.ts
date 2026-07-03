@@ -14,7 +14,8 @@ const HTMX_CDN = "https://unpkg.com/htmx.org@2.0.3";
 const BASE_CSS =
   "*:focus-visible{outline:2px solid var(--brand-accent);outline-offset:2px;border-radius:3px}" +
   "@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}" +
-  "code,pre{direction:ltr;unicode-bidi:isolate}.font-mono{unicode-bidi:isolate}";
+  "code,pre{direction:ltr;unicode-bidi:isolate}.font-mono{unicode-bidi:isolate}" +
+  ".pb-row:hover{background:var(--brand-elevated)}";
 
 export interface LayoutOpts {
   readonly brand: BrandConfig;

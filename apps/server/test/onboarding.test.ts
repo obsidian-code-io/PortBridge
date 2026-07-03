@@ -70,8 +70,8 @@ describe("onboarding flow", () => {
     let r = await app.request("/onboarding", form({ step: "0", action: "next", productName: "Acme Tunnels" }, cookie, csrf));
     expect(await r.text()).toContain("Branding essentials");
 
-    // Step 1 with an inaccessible primary → error, no advance
-    r = await app.request("/onboarding", form({ step: "1", action: "next", primary: "#020617" }, cookie, csrf));
+    // Step 1 with an inaccessible primary (near-white on the white bg) → error, no advance
+    r = await app.request("/onboarding", form({ step: "1", action: "next", primary: "#eeeeee" }, cookie, csrf));
     const errText = await r.text();
     expect(errText).toMatch(/contrast|readable/i);
 
@@ -79,7 +79,7 @@ describe("onboarding flow", () => {
     expect(await (await app.request("/onboarding", { headers: { cookie } })).text()).toContain("Branding essentials");
 
     // Step 1 valid → Preferences
-    r = await app.request("/onboarding", form({ step: "1", action: "next", primary: "#22c55e" }, cookie, csrf));
+    r = await app.request("/onboarding", form({ step: "1", action: "next", primary: "#1d4ed8" }, cookie, csrf));
     expect(await r.text()).toContain("Preferences");
 
     // Step 2 finish → HX-Redirect to the app
@@ -91,7 +91,7 @@ describe("onboarding flow", () => {
     const html = await home.text();
     expect(home.status).toBe(200);
     expect(html).toContain("Acme Tunnels");
-    expect(html).toContain("--brand-primary:#22c55e");
+    expect(html).toContain("--brand-primary:#1d4ed8");
   });
 
   test("skip advances without requiring input", async () => {
@@ -107,7 +107,7 @@ describe("settings (parity)", () => {
     const app = harness();
     const { cookie, csrf } = await login(app);
 
-    const ok = await app.request("/settings", form({ productName: "Rebrand Co", primary: "#38bdf8" }, cookie, csrf));
+    const ok = await app.request("/settings", form({ productName: "Rebrand Co", primary: "#1d4ed8" }, cookie, csrf));
     expect(ok.headers.get("hx-redirect")).toBe("/settings?saved=1");
 
     const page = await (await app.request("/settings?saved=1", { headers: { cookie } })).text();

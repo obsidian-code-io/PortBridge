@@ -7,7 +7,7 @@ import { ONBOARDING_STEPS, onboardingFragment, onboardingPage } from "../views/o
 // Fields captured at each step (must mirror the step forms in the view).
 const STEP_KEYS: readonly (readonly string[])[] = [
   ["productName"],
-  ["primary", "logoDark", "tagline"],
+  ["background", "primary", "logoDark", "tagline"],
   ["supportEmail", "supportUrl", "fontFamily", "dir", "locale"],
 ];
 

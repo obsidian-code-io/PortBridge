@@ -19,10 +19,22 @@ ratio of every visible text node against its effective background), interactive
 target sizes, keyboard-focus visibility, error messaging, brand-token
 application before first paint, and RTL mirroring.
 
+## Default scheme: white & black
+
+The default theme is a clean **white background with black type/accent**. The
+whole neutral palette is *derived from the background* (`deriveTokens(background,
+primary)`), so the same code renders a coherent light **or** dark theme with no
+hardcoded palette — a brand can set any background and the surfaces, borders,
+muted/accent/ok/danger text all recompute and are re-validated for AA. On-surface
+text tokens are ensured against the most extreme chip (`elevated`), so they clear
+AA on every surface, not just the base background.
+
 ## Result
 
-**No blockers, no majors remain.** All fixed in
-`fix(a11y): visible focus, AA target sizes, and RTL bidi isolation`.
+**No blockers, no majors remain** — re-verified on the white & black scheme in
+both LTR and RTL. Fixed across
+`fix(a11y): visible focus, AA target sizes, and RTL bidi isolation` and
+`feat(brand): white & black default via background-derived tokens`.
 
 | Check | Outcome |
 | --- | --- |
