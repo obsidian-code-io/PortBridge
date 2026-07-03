@@ -1,0 +1,40 @@
+services:
+  portbridge:
+    image: ghcr.io/obsidiancode/portbridge:latest
+    build: .
+    container_name: portbridge
+    restart: unless-stopped
+    environment:
+      # REQUIRED — must be >= 16 chars or the container refuses to boot.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set a strong ADMIN_TOKEN (>=16 chars)}
+      PORT: "8080"
+      PORT_RANGE: "30000-30999"
+      DEFAULT_TTL_MINUTES: "60"
+      MAX_FORWARDS: "50"
+      DATA_DIR: /app/data
+      # SOCAT_IMAGE: alpine/socat:1.8.0.0@sha256:<pin-me>
+      # DOCKER_HOST: tcp://docker-socket-proxy:2375   # optional, see README
+    volumes:
+      # ROOT-EQUIVALENT: mounting the docker socket grants full host control.
+      # Prefer a docker-socket-proxy in production (see README).
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portbridge-data:/app/data
+    # The `bun` user needs the host docker group's GID to read the socket.
+    # Find it with: getent group docker | cut -d: -f3   (often 999 or 998).
+    group_add:
+      - "999"
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portbridge.rule=Host(`portbridge.example.com`)
+      - traefik.http.routers.portbridge.entrypoints=websecure
+      - traefik.http.routers.portbridge.tls.certresolver=letsencrypt
+      - traefik.http.services.portbridge.loadbalancer.server.port=8080
+
+volumes:
+  portbridge-data:
+
+networks:
+  dokploy-network:
+    external: true
