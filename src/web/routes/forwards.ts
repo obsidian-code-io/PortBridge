@@ -4,7 +4,7 @@ import type Docker from "dockerode";
 import type { Config } from "../../config.ts";
 import type { CreateForwardInput } from "../../docker/forward-types.ts";
 import { listTargets } from "../../docker/containers.ts";
-import { createForward, deleteForward, listForwards } from "../../docker/forwards.ts";
+import { createForward, deleteForward, extendForward, listForwards } from "../../docker/forwards.ts";
 import { ForwardError } from "../../docker/forwards-errors.ts";
 import {
   forwardError,
@@ -81,6 +81,18 @@ export function forwardRoutes(docker: Docker, config: Config): Hono {
   });
 
   router.post("/forwards", (c) => handleCreate(docker, config, c));
+
+  router.post("/forwards/:id/extend", async (c) => {
+    const ttlRaw = asString((await c.req.parseBody())["ttl"]) ?? String(config.defaultTtlMinutes);
+    const ttl = ttlRaw === "never" ? "never" : asInt(ttlRaw) ?? config.defaultTtlMinutes;
+    try {
+      const forward = await extendForward(docker, config, c.req.param("id"), ttl);
+      c.header("HX-Trigger", "forwardsChanged");
+      return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
+    } catch (err) {
+      return c.html(forwardError(messageFor(err)), 400);
+    }
+  });
 
   router.post("/forwards/:id/delete", async (c) => {
     await deleteForward(docker, c.req.param("id"));

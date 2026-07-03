@@ -11,6 +11,7 @@ import { getSelfId } from "./containers.ts";
 import { buildLabels, forwardFromLabels, LABEL, MANAGED_FILTER } from "./labels.ts";
 import { resolveNetwork, type ResolvedNetwork } from "./forwards-network.ts";
 import {
+  ForwardNotFoundError,
   HostPortUnavailableError,
   InvalidTargetError,
   MaxForwardsReachedError,
@@ -204,6 +205,28 @@ export async function createForward(
   const resolved = await resolveNetwork(docker, target);
   await ensureImage(docker, config.socatImage);
   return attemptCreate(docker, config, input, target, resolved, usedHostPorts(existing));
+}
+
+/**
+ * Extend a forward's TTL. Labels are immutable on a running container, so this
+ * force-removes the sidecar and recreates it with the same target/port/network
+ * and a fresh expires.at — a brief connection blip. Returns the new forward.
+ */
+export async function extendForward(
+  docker: Docker,
+  config: Config,
+  id: string,
+  ttlMinutes: number | "never",
+): Promise<Forward> {
+  const current = (await listForwards(docker)).find((f) => f.id === id);
+  if (current === undefined) throw new ForwardNotFoundError(`forward not found: ${id}`);
+  await deleteForward(docker, id);
+  return createForward(docker, config, {
+    targetId: current.targetId,
+    targetPort: current.targetPort,
+    hostPort: current.hostPort,
+    ttlMinutes,
+  });
 }
 
 function statusCode(err: unknown): number | undefined {

@@ -101,12 +101,31 @@ export function forwardResultCard(forward: Forward, host: string): Html {
   </div>`;
 }
 
+function extendControl(forward: Forward): Html {
+  return html`<form
+    class="flex items-center gap-1"
+    hx-post="/forwards/${forward.id}/extend"
+    hx-target="#panel"
+    hx-swap="innerHTML"
+    title="Extend recreates the sidecar — expect a brief connection blip."
+  >
+    <select name="ttl" class="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-xs">
+      <option value="15">15m</option>
+      <option value="60" selected>1h</option>
+      <option value="480">8h</option>
+      <option value="1440">24h</option>
+    </select>
+    <button class="text-xs text-sky-400 hover:text-sky-300">extend</button>
+  </form>`;
+}
+
 function forwardRow(forward: Forward, host: string, now: number): Html {
   return html`<tr class="border-b border-slate-900">
     <td class="py-2 pr-4 font-mono">${host}:${forward.hostPort}</td>
     <td class="py-2 pr-4 font-mono text-slate-300">${forward.targetName}:${forward.targetPort}</td>
     <td class="py-2 pr-4 text-slate-400">${forward.network}</td>
     <td class="py-2 pr-4 text-slate-400">${expiresLabel(forward, now)}</td>
+    <td class="py-2 pr-2">${extendControl(forward)}</td>
     <td class="py-2 pr-2">
       <a class="text-xs text-slate-400 hover:text-slate-200" href="/forwards/${forward.id}/logs" target="_blank">logs</a>
     </td>
@@ -131,6 +150,7 @@ export function managedForwardsTable(forwards: readonly Forward[], host: string,
         <th class="py-2 pr-4 font-medium">Target</th>
         <th class="py-2 pr-4 font-medium">Network</th>
         <th class="py-2 pr-4 font-medium">Expires</th>
+        <th class="py-2 pr-2 font-medium"></th>
         <th class="py-2 pr-2 font-medium"></th>
         <th class="py-2 font-medium"></th>
       </tr>

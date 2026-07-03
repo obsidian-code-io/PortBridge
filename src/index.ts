@@ -7,6 +7,8 @@
 import { Hono } from "hono";
 import { loadConfig, ConfigError, type Config } from "./config.ts";
 import { getDocker } from "./docker/client.ts";
+import { startReaper } from "./docker/reaper.ts";
+import { consoleAuditWriter } from "./audit/types.ts";
 import { dashboardRoutes } from "./web/routes/dashboard.ts";
 import { forwardRoutes } from "./web/routes/forwards.ts";
 
@@ -37,6 +39,19 @@ app.get("/healthz", async (c) => {
 // Dashboard + HTMX target search. (Auth guard lands in Phase 4.)
 app.route("/", dashboardRoutes(docker));
 app.route("/", forwardRoutes(docker, config));
+
+// Start the reaper once we've confirmed Docker is reachable. If the daemon is
+// down at boot we still start it — each tick tolerates failure and self-heals.
+async function startBackground(): Promise<void> {
+  try {
+    await docker.ping();
+    console.info("[portbridge] docker reachable — starting reaper (30s)");
+  } catch {
+    console.warn("[portbridge] docker unreachable at boot — reaper will retry each tick");
+  }
+  startReaper(docker, consoleAuditWriter);
+}
+void startBackground();
 
 console.info(`[portbridge] listening on :${config.port}`);
 
