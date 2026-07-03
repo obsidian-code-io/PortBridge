@@ -18,14 +18,23 @@ function searchInput(): Html {
   />`;
 }
 
-function managedForwardsPlaceholder(): Html {
-  return html`<div class="rounded-md border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400">
-    No active forwards yet. The forward engine lands in Phase 2.
+function managedForwardsSection(): Html {
+  // Loads live data from /forwards/table on page load and whenever a forward
+  // is created/deleted (server emits the `forwardsChanged` event).
+  return html`<div
+    id="managed"
+    hx-get="/forwards/table"
+    hx-trigger="load, forwardsChanged from:body"
+    hx-swap="innerHTML"
+  >
+    <div class="text-sm text-slate-500">Loading forwards…</div>
   </div>`;
 }
 
 function dashboardBody(targets: readonly Target[], error: string | undefined): Html {
-  return html`<section class="mb-8">
+  return html`<div id="panel" class="mb-8 empty:mb-0"></div>
+
+  <section class="mb-8">
     <div class="mb-3 flex items-center justify-between">
       <h2 class="text-lg font-medium">Targets</h2>
       ${searchInput()}
@@ -35,7 +44,7 @@ function dashboardBody(targets: readonly Target[], error: string | undefined): H
 
   <section>
     <h2 class="mb-3 text-lg font-medium">Managed forwards</h2>
-    ${managedForwardsPlaceholder()}
+    ${managedForwardsSection()}
   </section>`;
 }
 

@@ -36,13 +36,23 @@ function cell<T>(items: readonly T[], empty: string, render: (x: T) => Html): Ht
   return html`${items.map(render)}`;
 }
 
+function forwardAction(target: Target): Html {
+  return html`<button
+    class="rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700"
+    hx-get="/forwards/new?target=${target.id}"
+    hx-target="#panel"
+    hx-swap="innerHTML"
+  >forward</button>`;
+}
+
 function targetRow(target: Target): Html {
   return html`<tr class="border-b border-slate-900 hover:bg-slate-900/40">
     <td class="py-2 pr-4 font-mono">${target.name}</td>
     <td class="py-2 pr-4 text-slate-300">${target.image}</td>
     <td class="py-2 pr-4">${stateBadge(target.state)}</td>
     <td class="py-2 pr-4 text-slate-300">${cell(target.networks, "—", networkChip)}</td>
-    <td class="py-2">${cell(target.ports, "none exposed", portChip)}</td>
+    <td class="py-2 pr-4">${cell(target.ports, "none exposed", portChip)}</td>
+    <td class="py-2 text-right">${forwardAction(target)}</td>
   </tr>`;
 }
 
@@ -57,7 +67,8 @@ export function targetsTable(targets: readonly Target[]): Html {
         <th class="py-2 pr-4 font-medium">Image</th>
         <th class="py-2 pr-4 font-medium">State</th>
         <th class="py-2 pr-4 font-medium">Networks</th>
-        <th class="py-2 font-medium">Ports</th>
+        <th class="py-2 pr-4 font-medium">Ports</th>
+        <th class="py-2 font-medium"></th>
       </tr>
     </thead>
     <tbody>

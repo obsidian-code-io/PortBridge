@@ -35,7 +35,7 @@ function isManaged(summary: ContainerInfo): boolean {
   return summary.Labels[MANAGED_LABEL] === "true";
 }
 
-async function getSelfId(docker: Docker): Promise<string | undefined> {
+export async function getSelfId(docker: Docker): Promise<string | undefined> {
   const hostname = process.env.HOSTNAME;
   if (hostname === undefined || hostname === "") return undefined;
   try {
