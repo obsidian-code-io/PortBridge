@@ -1,0 +1,68 @@
+# Hardened deployment: PortBridge talks to Docker via a read-scoped
+# docker-socket-proxy instead of mounting the raw (root-equivalent) socket.
+#
+#   docker compose -f docker-compose.socket-proxy.yml up -d
+#
+# The proxy grants ONLY the endpoints PortBridge needs (deny-by-default):
+#   containers list/inspect/create/delete/logs, networks list/inspect,
+#   images pull, and ping. Everything else stays 0.
+
+services:
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: portbridge-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1 # GET/inspect + logs on /containers
+      NETWORKS: 1 # list/inspect networks
+      IMAGES: 1 # inspect + pull images
+      PING: 1 # /_ping health check
+      POST: 1 # required for create/delete/connect and image pull
+      # --- everything else stays denied (0) ---
+      INFO: 0
+      EXEC: 0
+      VOLUMES: 0
+      SERVICES: 0
+      SWARM: 0
+      SYSTEM: 0
+      AUTH: 0
+      SECRETS: 0
+      BUILD: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dokploy-network
+
+  portbridge:
+    image: ghcr.io/obsidiancode/portbridge:latest
+    build: .
+    container_name: portbridge
+    restart: unless-stopped
+    depends_on:
+      - docker-socket-proxy
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set a strong ADMIN_TOKEN (>=16 chars)}
+      PORT: "8080"
+      PORT_RANGE: "30000-30999"
+      DEFAULT_TTL_MINUTES: "60"
+      MAX_FORWARDS: "50"
+      DATA_DIR: /app/data
+      # No socket mount — reach Docker through the proxy instead.
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+    volumes:
+      - portbridge-data:/app/data
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.portbridge.rule=Host(`portbridge.example.com`)
+      - traefik.http.routers.portbridge.entrypoints=websecure
+      - traefik.http.routers.portbridge.tls.certresolver=letsencrypt
+      - traefik.http.services.portbridge.loadbalancer.server.port=8080
+
+volumes:
+  portbridge-data:
+
+networks:
+  dokploy-network:
+    external: true
