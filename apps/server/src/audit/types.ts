@@ -11,7 +11,12 @@ export type AuditAction =
   | "reconciled_missing"
   | "create_failed"
   | "login_ok"
-  | "login_fail";
+  | "login_fail"
+  | "tunnel_opened"
+  | "tunnel_closed"
+  | "tunnel_expired"
+  | "tunnel_revoked"
+  | "agent_auth_fail";
 
 export interface AuditEvent {
   readonly actor: string;

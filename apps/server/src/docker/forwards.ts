@@ -6,7 +6,7 @@
 import type Docker from "dockerode";
 import type { ContainerCreateOptions, ContainerInspectInfo } from "dockerode";
 import type { Config, PortRange } from "../config.ts";
-import type { CreateForwardInput, Forward } from "./forward-types.ts";
+import type { CreateForwardInput, Forward, ForwardRegistry } from "./forward-types.ts";
 import { getSelfId } from "./containers.ts";
 import { buildLabels, forwardFromLabels, LABEL, MANAGED_FILTER } from "./labels.ts";
 import { resolveNetwork, type ResolvedNetwork } from "./forwards-network.ts";
@@ -31,8 +31,8 @@ export function allocateHostPort(range: PortRange, used: ReadonlySet<number>): n
   throw new NoFreePortError(`no free host port in ${range.start}-${range.end}`);
 }
 
-/** THE source of truth: reconstruct active forwards from sidecar labels. */
-export async function listForwards(docker: Docker): Promise<Forward[]> {
+/** Reconstruct tcp forwards from sidecar labels — the source of truth for tcp. */
+export async function listTcpForwards(docker: Docker): Promise<Forward[]> {
   const summaries = await docker.listContainers({
     all: true,
     filters: { label: [MANAGED_FILTER] },
@@ -40,11 +40,37 @@ export async function listForwards(docker: Docker): Promise<Forward[]> {
   return summaries
     .map((s) => forwardFromLabels(s.Labels))
     .filter((f): f is Forward => f !== undefined)
-    .sort((a, b) => a.hostPort - b.hostPort);
+    .sort((a, b) => (a.hostPort ?? 0) - (b.hostPort ?? 0));
 }
 
-/** Force-remove the sidecar(s) for a forward id. Idempotent (missing = ok). */
-export async function deleteForward(docker: Docker, id: string): Promise<void> {
+/**
+ * THE merged source of truth for active forwards:
+ *   label-derived tcp sidecars  ⊎  in-memory agent-tunnel registry.
+ * agent-tunnels are intentionally NOT reconstructable from Docker.
+ */
+export async function listForwards(docker: Docker, registry: ForwardRegistry): Promise<Forward[]> {
+  return [...(await listTcpForwards(docker)), ...registry.list()];
+}
+
+/**
+ * Tear down a forward. Branches on kind: tcp force-removes the sidecar(s)
+ * (idempotent), agent-tunnel closes its registry entry (dropping its streams).
+ */
+export async function deleteForward(
+  docker: Docker,
+  registry: ForwardRegistry,
+  id: string,
+  reason?: string,
+): Promise<void> {
+  if (registry.has(id)) {
+    registry.close(id, reason);
+    return;
+  }
+  await removeTcpForward(docker, id);
+}
+
+/** Force-remove the sidecar(s) for a tcp forward id. Idempotent (missing = ok). */
+export async function removeTcpForward(docker: Docker, id: string): Promise<void> {
   const summaries = await docker.listContainers({
     all: true,
     filters: { label: [`${LABEL.id}=${id}`] },
@@ -62,7 +88,8 @@ async function removeIgnoringMissing(docker: Docker, containerId: string): Promi
   }
 }
 
-async function inspectTarget(docker: Docker, id: string): Promise<ContainerInspectInfo> {
+/** Inspect a forward target, rejecting self and managed sidecars (SSRF/SR-4). */
+export async function inspectTarget(docker: Docker, id: string): Promise<ContainerInspectInfo> {
   let inspect: ContainerInspectInfo;
   try {
     inspect = await docker.getContainer(id).inspect();
@@ -79,7 +106,11 @@ async function inspectTarget(docker: Docker, id: string): Promise<ContainerInspe
 }
 
 function usedHostPorts(forwards: readonly Forward[]): Set<number> {
-  return new Set(forwards.map((f) => f.hostPort));
+  const used = new Set<number>();
+  for (const f of forwards) {
+    if (f.hostPort !== null) used.add(f.hostPort);
+  }
+  return used;
 }
 
 async function ensureImage(docker: Docker, image: string): Promise<void> {
@@ -191,37 +222,51 @@ async function attemptCreate(
   throw new NoFreePortError("exhausted host-port allocation retries");
 }
 
-/** Create a forward, failing closed on limits, bad targets, or no network. */
+/**
+ * Create a tcp forward, failing closed on limits, bad targets, or no network.
+ * MAX_FORWARDS is the SHARED cap across sidecars + agent-tunnels.
+ */
 export async function createForward(
   docker: Docker,
   config: Config,
+  registry: ForwardRegistry,
   input: CreateForwardInput,
 ): Promise<Forward> {
-  const existing = await listForwards(docker);
-  if (existing.length >= config.maxForwards) {
+  const tcp = await listTcpForwards(docker);
+  if (tcp.length + registry.size() >= config.maxForwards) {
     throw new MaxForwardsReachedError(`MAX_FORWARDS (${config.maxForwards}) reached`);
   }
   const target = await inspectTarget(docker, input.targetId);
   const resolved = await resolveNetwork(docker, target);
   await ensureImage(docker, config.socatImage);
-  return attemptCreate(docker, config, input, target, resolved, usedHostPorts(existing));
+  return attemptCreate(docker, config, input, target, resolved, usedHostPorts(tcp));
 }
 
 /**
- * Extend a forward's TTL. Labels are immutable on a running container, so this
- * force-removes the sidecar and recreates it with the same target/port/network
- * and a fresh expires.at — a brief connection blip. Returns the new forward.
+ * Extend a forward's TTL. Branches on kind:
+ *  - agent-tunnel: just update the registry entry's expiry (no recreate).
+ *  - tcp: labels are immutable on a running container, so force-remove the
+ *    sidecar and recreate it with the same target/port/network and a fresh
+ *    expires.at — a brief connection blip.
  */
 export async function extendForward(
   docker: Docker,
   config: Config,
+  registry: ForwardRegistry,
   id: string,
   ttlMinutes: number | "never",
 ): Promise<Forward> {
-  const current = (await listForwards(docker)).find((f) => f.id === id);
-  if (current === undefined) throw new ForwardNotFoundError(`forward not found: ${id}`);
-  await deleteForward(docker, id);
-  return createForward(docker, config, {
+  if (registry.has(id)) {
+    const extended = registry.extend(id, ttlMinutes);
+    if (extended === undefined) throw new ForwardNotFoundError(`forward not found: ${id}`);
+    return extended;
+  }
+  const current = (await listTcpForwards(docker)).find((f) => f.id === id);
+  if (current === undefined || current.hostPort === null) {
+    throw new ForwardNotFoundError(`forward not found: ${id}`);
+  }
+  await deleteForward(docker, registry, id);
+  return createForward(docker, config, registry, {
     targetId: current.targetId,
     targetPort: current.targetPort,
     hostPort: current.hostPort,

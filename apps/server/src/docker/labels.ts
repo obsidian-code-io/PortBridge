@@ -22,6 +22,11 @@ export const LABEL = {
 export const MANAGED_FILTER = `${LABEL.managed}=true`;
 
 export function buildLabels(forward: Forward): Record<string, string> {
+  // Labels are the source of truth for tcp forwards ONLY. agent-tunnels have no
+  // sidecar and must never be label-backed — fail closed if one reaches here.
+  if (forward.kind !== "tcp" || forward.hostPort === null) {
+    throw new Error("buildLabels is tcp-only; agent-tunnels are not label-backed");
+  }
   return {
     [LABEL.managed]: "true",
     [LABEL.id]: forward.id,

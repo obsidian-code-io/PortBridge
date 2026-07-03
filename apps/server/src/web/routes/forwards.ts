@@ -4,7 +4,7 @@ import type Docker from "dockerode";
 import type { Config } from "../../config.ts";
 import type { AppEnv } from "../env.ts";
 import type { AuditWriter } from "../../audit/types.ts";
-import type { CreateForwardInput, Forward } from "../../docker/forward-types.ts";
+import type { CreateForwardInput, Forward, ForwardRegistry } from "../../docker/forward-types.ts";
 import { listTargets } from "../../docker/containers.ts";
 import {
   createForward,
@@ -65,17 +65,17 @@ function auditCreated(audit: AuditWriter, action: "forward_created" | "forward_e
     forwardId: f.id,
     targetName: f.targetName,
     targetPort: String(f.targetPort),
-    hostPort: String(f.hostPort),
+    hostPort: f.hostPort === null ? undefined : String(f.hostPort),
     ttlMinutes: f.expiresAt === "never" ? undefined : Math.round((f.expiresAt - f.createdAt) / 60),
     detail: f.expiresAt === "never" ? "never" : undefined,
   });
 }
 
-async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, c: Context) {
+async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, registry: ForwardRegistry, c: Context) {
   const parsed = parseForwardInput(await c.req.parseBody());
   if (!parsed.ok) return c.html(forwardError(parsed.error), 400);
   try {
-    const forward = await createForward(docker, config, parsed.input);
+    const forward = await createForward(docker, config, registry, parsed.input);
     auditCreated(audit, "forward_created", forward);
     c.header("HX-Trigger", "forwardsChanged");
     return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
@@ -85,11 +85,18 @@ async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, 
   }
 }
 
-async function handleExtend(docker: Docker, config: Config, audit: AuditWriter, c: Context, id: string) {
+async function handleExtend(
+  docker: Docker,
+  config: Config,
+  audit: AuditWriter,
+  registry: ForwardRegistry,
+  c: Context,
+  id: string,
+) {
   const ttlRaw = asString((await c.req.parseBody())["ttl"]) ?? String(config.defaultTtlMinutes);
   const ttl = ttlRaw === "never" ? "never" : asInt(ttlRaw) ?? config.defaultTtlMinutes;
   try {
-    const forward = await extendForward(docker, config, id, ttl);
+    const forward = await extendForward(docker, config, registry, id, ttl);
     auditCreated(audit, "forward_extend", forward);
     c.header("HX-Trigger", "forwardsChanged");
     return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
@@ -98,7 +105,12 @@ async function handleExtend(docker: Docker, config: Config, audit: AuditWriter, 
   }
 }
 
-export function forwardRoutes(docker: Docker, config: Config, audit: AuditWriter): Hono<AppEnv> {
+export function forwardRoutes(
+  docker: Docker,
+  config: Config,
+  audit: AuditWriter,
+  registry: ForwardRegistry,
+): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.get("/forwards/panel", (c) => c.html(""));
@@ -110,7 +122,7 @@ export function forwardRoutes(docker: Docker, config: Config, audit: AuditWriter
   });
 
   router.get("/forwards/table", async (c) => {
-    const forwards = await listForwards(docker);
+    const forwards = await listForwards(docker, registry);
     return c.html(managedForwardsTable(forwards, hostOf(c.req.header("host")), Math.floor(Date.now() / 1000)));
   });
 
@@ -123,13 +135,18 @@ export function forwardRoutes(docker: Docker, config: Config, audit: AuditWriter
     }
   });
 
-  router.post("/forwards", (c) => handleCreate(docker, config, audit, c));
-  router.post("/forwards/:id/extend", (c) => handleExtend(docker, config, audit, c, c.req.param("id")));
+  router.post("/forwards", (c) => handleCreate(docker, config, audit, registry, c));
+  router.post("/forwards/:id/extend", (c) => handleExtend(docker, config, audit, registry, c, c.req.param("id")));
 
   router.post("/forwards/:id/delete", async (c) => {
     const id = c.req.param("id");
-    await deleteForward(docker, id);
-    audit.write({ actor: "admin", action: "forward_deleted", forwardId: id });
+    const isTunnel = registry.has(id);
+    await deleteForward(docker, registry, id, "ui");
+    audit.write(
+      isTunnel
+        ? { actor: "admin", action: "tunnel_revoked", forwardId: id, detail: "ui" }
+        : { actor: "admin", action: "forward_deleted", forwardId: id },
+    );
     c.header("HX-Trigger", "forwardsChanged");
     return c.html("");
   });

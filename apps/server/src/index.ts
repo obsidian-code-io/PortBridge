@@ -10,6 +10,7 @@ import { startReaper } from "./docker/reaper.ts";
 import { openAuditDb } from "./audit/db.ts";
 import { SqliteAuditLog } from "./audit/log.ts";
 import { createApp } from "./web/app.ts";
+import { agentWebsocket } from "./agent/websocket.ts";
 
 function loadConfigOrExit(): Config {
   try {
@@ -24,7 +25,7 @@ function loadConfigOrExit(): Config {
 const config = loadConfigOrExit();
 const docker = getDocker(config);
 const audit = new SqliteAuditLog(openAuditDb(config.dataDir));
-const app = createApp(docker, config, audit, audit);
+const { app, registry } = createApp(docker, config, audit, audit);
 
 async function startBackground(): Promise<void> {
   try {
@@ -33,7 +34,7 @@ async function startBackground(): Promise<void> {
   } catch {
     console.warn("[portbridge] docker unreachable at boot — reaper will retry each tick");
   }
-  startReaper(docker, audit);
+  startReaper(docker, registry, audit);
 }
 void startBackground();
 
@@ -42,4 +43,5 @@ console.info(`[portbridge] listening on :${config.port}`);
 export default {
   port: config.port,
   fetch: app.fetch,
+  websocket: agentWebsocket,
 };

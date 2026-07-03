@@ -9,7 +9,7 @@ import {
   MaxForwardsReachedError,
   NonAttachableNetworkError,
 } from "../src/docker/forwards-errors.ts";
-import type { Forward } from "../src/docker/forward-types.ts";
+import type { Forward, ForwardRegistry } from "../src/docker/forward-types.ts";
 
 const CONFIG: Config = {
   adminToken: "0123456789abcdef",
@@ -20,6 +20,16 @@ const CONFIG: Config = {
   socatImage: "alpine/socat:test",
   dockerHost: undefined,
   dataDir: "/tmp",
+};
+
+// tcp tests run against an empty agent-tunnel registry.
+const registry: ForwardRegistry = {
+  list: () => [],
+  size: () => 0,
+  has: () => false,
+  close: () => undefined,
+  extend: () => undefined,
+  expireDue: () => [],
 };
 
 interface Sidecar {
@@ -128,7 +138,7 @@ describe("createForward", () => {
       networks: { "app-net": { Driver: "bridge" } },
       images: ["alpine/socat:test"],
     });
-    const fwd = await createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
+    const fwd = await createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
     expect(fwd.hostPort).toBe(30000);
     expect(fwd.network).toBe("app-net");
     const opts = fake.created[0]!;
@@ -137,7 +147,7 @@ describe("createForward", () => {
     expect(labels["portbridge.managed"]).toBe("true");
     expect(labels["portbridge.host.port"]).toBe("30000");
     // listForwards reconstructs it purely from labels
-    const listed = await listForwards(fake.docker);
+    const listed = await listForwards(fake.docker, registry);
     expect(listed).toHaveLength(1);
     expect(listed[0]?.hostPort).toBe(30000);
   });
@@ -147,7 +157,7 @@ describe("createForward", () => {
       targets: { db: target("db", { bridge: { IPAddress: "172.17.0.9" } }) },
       images: ["alpine/socat:test"],
     });
-    const fwd = await createForward(fake.docker, CONFIG, { targetId: "db", targetPort: 5432, ttlMinutes: 15 });
+    const fwd = await createForward(fake.docker, CONFIG, registry, { targetId: "db", targetPort: 5432, ttlMinutes: 15 });
     expect(fwd.network).toBe("bridge");
     expect((fake.created[0]!["Cmd"] as string[])[1]).toBe("TCP-CONNECT:172.17.0.9:5432");
   });
@@ -159,7 +169,7 @@ describe("createForward", () => {
       images: ["alpine/socat:test"],
     });
     await expect(
-      createForward(fake.docker, CONFIG, { targetId: "svc", targetPort: 80, ttlMinutes: 60 }),
+      createForward(fake.docker, CONFIG, registry, { targetId: "svc", targetPort: 80, ttlMinutes: 60 }),
     ).rejects.toBeInstanceOf(NonAttachableNetworkError);
   });
 
@@ -170,7 +180,7 @@ describe("createForward", () => {
       images: ["alpine/socat:test"],
       takenPortsOnce: new Set([30000]),
     });
-    const fwd = await createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
+    const fwd = await createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
     expect(fwd.hostPort).toBe(30001);
   });
 
@@ -180,10 +190,10 @@ describe("createForward", () => {
       networks: { "app-net": { Driver: "bridge" } },
       images: ["alpine/socat:test"],
     });
-    await createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
-    await createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 81, ttlMinutes: 60 });
+    await createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
+    await createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 81, ttlMinutes: 60 });
     await expect(
-      createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 82, ttlMinutes: 60 }),
+      createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 82, ttlMinutes: 60 }),
     ).rejects.toBeInstanceOf(MaxForwardsReachedError);
   });
 
@@ -191,7 +201,7 @@ describe("createForward", () => {
     const managed = { Id: "sidecarid", Name: "/portbridge-x", Config: { Labels: { "portbridge.managed": "true" } }, NetworkSettings: { Networks: {} } };
     const fake = makeFake({ targets: { sidecarid: managed }, images: ["alpine/socat:test"] });
     await expect(
-      createForward(fake.docker, CONFIG, { targetId: "sidecarid", targetPort: 80, ttlMinutes: 60 }),
+      createForward(fake.docker, CONFIG, registry, { targetId: "sidecarid", targetPort: 80, ttlMinutes: 60 }),
     ).rejects.toBeInstanceOf(InvalidTargetError);
   });
 
@@ -202,7 +212,7 @@ describe("createForward", () => {
       images: ["alpine/socat:test"],
     });
     await expect(
-      createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 80, hostPort: 40000, ttlMinutes: 60 }),
+      createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 80, hostPort: 40000, ttlMinutes: 60 }),
     ).rejects.toBeInstanceOf(HostPortUnavailableError);
   });
 });
@@ -214,9 +224,9 @@ describe("deleteForward", () => {
       networks: { "app-net": { Driver: "bridge" } },
       images: ["alpine/socat:test"],
     });
-    const fwd = await createForward(fake.docker, CONFIG, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
-    await deleteForward(fake.docker, fwd.id);
-    expect(await listForwards(fake.docker)).toHaveLength(0);
-    await deleteForward(fake.docker, fwd.id); // second call is a no-op success
+    const fwd = await createForward(fake.docker, CONFIG, registry, { targetId: "web", targetPort: 80, ttlMinutes: 60 });
+    await deleteForward(fake.docker, registry, fwd.id);
+    expect(await listForwards(fake.docker, registry)).toHaveLength(0);
+    await deleteForward(fake.docker, registry, fwd.id); // second call is a no-op success
   });
 });

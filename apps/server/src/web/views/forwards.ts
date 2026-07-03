@@ -88,7 +88,9 @@ export function forwardForm(target: Target): Html {
 }
 
 export function forwardResultCard(forward: Forward, host: string): Html {
-  const address = `${host}:${forward.hostPort}`;
+  // Result cards are only rendered for tcp forwards (which always have a host port).
+  const hostPort = forward.hostPort ?? 0;
+  const address = `${host}:${hostPort}`;
   return html`<div class="space-y-2 rounded-md border border-emerald-900 bg-emerald-950/40 p-4 text-sm">
     <h3 class="font-medium text-emerald-300">Forward open</h3>
     <div class="flex items-center gap-2">
@@ -97,7 +99,7 @@ export function forwardResultCard(forward: Forward, host: string): Html {
         onclick="navigator.clipboard.writeText('${address}')">copy</button>
     </div>
     <p class="text-slate-400">→ <span class="font-mono">${forward.targetName}:${forward.targetPort}</span> on ${forward.network}</p>
-    <pre class="overflow-x-auto rounded bg-slate-950 px-3 py-2 text-xs text-slate-300">${clientHint(host, forward.hostPort, forward.targetPort)}</pre>
+    <pre class="overflow-x-auto rounded bg-slate-950 px-3 py-2 text-xs text-slate-300">${clientHint(host, hostPort, forward.targetPort)}</pre>
   </div>`;
 }
 
@@ -119,28 +121,45 @@ function extendControl(forward: Forward): Html {
   </form>`;
 }
 
+function addressCell(forward: Forward, host: string): Html {
+  if (forward.kind === "agent-tunnel" || forward.hostPort === null) {
+    return html`<span class="rounded bg-violet-900/60 px-2 py-0.5 text-xs text-violet-300" title="tunnelled to a laptop over an outbound WebSocket">via agent</span>`;
+  }
+  return html`<span class="font-mono">${host}:${forward.hostPort}</span>`;
+}
+
+function killButton(forward: Forward, tcp: boolean): Html {
+  return html`<button
+    class="text-xs text-red-400 hover:text-red-300"
+    hx-post="/forwards/${forward.id}/delete"
+    hx-target="#panel"
+    hx-swap="innerHTML"
+    hx-confirm="${tcp ? "Delete this forward?" : "Kill this tunnel?"}"
+  >${tcp ? "delete" : "kill"}</button>`;
+}
+
 function forwardRow(forward: Forward, host: string, now: number): Html {
+  const tcp = forward.kind === "tcp";
   return html`<tr class="border-b border-slate-900">
-    <td class="py-2 pr-4 font-mono">${host}:${forward.hostPort}</td>
+    <td class="py-2 pr-4">${addressCell(forward, host)}</td>
     <td class="py-2 pr-4 font-mono text-slate-300">${forward.targetName}:${forward.targetPort}</td>
     <td class="py-2 pr-4 text-slate-400">${forward.network}</td>
     <td class="py-2 pr-4 text-slate-400">${expiresLabel(forward, now)}</td>
-    <td class="py-2 pr-2">${extendControl(forward)}</td>
+    <td class="py-2 pr-2">${tcp ? extendControl(forward) : html``}</td>
     <td class="py-2 pr-2">
-      <a class="text-xs text-slate-400 hover:text-slate-200" href="/forwards/${forward.id}/logs" target="_blank">logs</a>
+      ${tcp
+        ? html`<a class="text-xs text-slate-400 hover:text-slate-200" href="/forwards/${forward.id}/logs" target="_blank">logs</a>`
+        : html`<span class="text-xs text-slate-600">via agent</span>`}
     </td>
-    <td class="py-2">
-      <button class="text-xs text-red-400 hover:text-red-300"
-        hx-post="/forwards/${forward.id}/delete" hx-target="#panel" hx-swap="innerHTML"
-        hx-confirm="Delete this forward?">delete</button>
-    </td>
+    <td class="py-2">${killButton(forward, tcp)}</td>
   </tr>`;
 }
 
 export function managedForwardsTable(forwards: readonly Forward[], host: string, now: number): Html {
   if (forwards.length === 0) {
     return html`<div class="rounded-md border border-slate-800 bg-slate-900/50 px-4 py-6 text-sm text-slate-400">
-      No active forwards.
+      No active forwards. Open a TCP forward above, or reach a cloud container from your laptop:
+      <code class="rounded bg-slate-950 px-1.5 py-0.5 text-xs text-slate-300">portbridge tunnel &lt;target&gt; &lt;port&gt;</code>
     </div>`;
   }
   return html`<table class="w-full border-collapse text-sm">

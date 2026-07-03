@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type Docker from "dockerode";
 import type { Config } from "../src/config.ts";
-import type { AuditEvent, AuditWriter } from "../src/audit/types.ts";
+import type { AuditEvent, AuditReader, AuditWriter } from "../src/audit/types.ts";
 import { createApp } from "../src/web/app.ts";
 
 const TOKEN = "0123456789abcdef0123";
@@ -27,8 +27,9 @@ function fakeDocker() {
 
 function harness() {
   const events: AuditEvent[] = [];
-  const audit: AuditWriter = { write: (e) => events.push(e) };
-  return { app: createApp(fakeDocker(), CONFIG, audit), events };
+  const audit: AuditWriter & AuditReader = { write: (e) => events.push(e), query: () => [] };
+  const { app } = createApp(fakeDocker(), CONFIG, audit, audit);
+  return { app, events };
 }
 
 function form(fields: Record<string, string>): RequestInit {
