@@ -5,7 +5,7 @@ import type { Config } from "../../config.ts";
 import type { AppEnv } from "../env.ts";
 import type { AuditWriter } from "../../audit/types.ts";
 import type { CreateForwardInput, Forward, ForwardRegistry } from "../../docker/forward-types.ts";
-import { listTargets } from "../../docker/containers.ts";
+import { listTargets, type Target } from "../../docker/containers.ts";
 import {
   createForward,
   deleteForward,
@@ -14,7 +14,7 @@ import {
   tailForwardLogs,
 } from "../../docker/forwards.ts";
 import { ForwardError } from "../../docker/forwards-errors.ts";
-import { forwardError, forwardForm, forwardResultCard, managedForwardsTable } from "../views/forwards.ts";
+import { forwardError, forwardForm, forwardPicker, forwardResultCard, managedForwardsTable, pickList } from "../views/forwards.ts";
 import { logsPage } from "../views/logs.ts";
 import type { Html } from "../views/html.ts";
 import type { Principal } from "../../access/types.ts";
@@ -146,6 +146,18 @@ export function forwardRoutes(
   const router = new Hono<AppEnv>();
 
   router.get("/forwards/panel", (c) => c.html(""));
+
+  // Searchable container picker (the "select the Docker image easily" flow).
+  const pickable = async (c: Context<AppEnv>): Promise<Target[]> => {
+    const principal = c.get("principal");
+    const q = (c.req.query("q") ?? "").trim().toLowerCase();
+    const targets = (await listTargets(docker)).filter((t) => targetVisible(principal, t));
+    if (q === "") return targets;
+    return targets.filter((t) => t.name.toLowerCase().includes(q) || t.image.toLowerCase().includes(q));
+  };
+
+  router.get("/forwards/pick", async (c) => c.html(forwardPicker(await pickable(c))));
+  router.get("/forwards/pick/list", async (c) => c.html(pickList(await pickable(c))));
 
   router.get("/forwards/new", async (c) => {
     const target = (await listTargets(docker)).find((t) => t.id === c.req.query("target"));

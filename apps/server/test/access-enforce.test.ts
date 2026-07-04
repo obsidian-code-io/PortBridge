@@ -73,6 +73,15 @@ async function post(app: App, path: string, body: unknown, headers: Record<strin
   return app.request(path, { method: "POST", headers, body: JSON.stringify(body) });
 }
 
+async function webLogin(app: App, token: string): Promise<string> {
+  const r = await app.request("/login", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }).toString(),
+  });
+  return (r.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+}
+
 async function makeScopedKey(app: App): Promise<string> {
   const roleRes = await post(app, "/api/roles", { name: "db", allPorts: false, ports: [5432], allContainers: true }, admin);
   const roleId = (await roleRes.json()).id as string;
@@ -149,6 +158,24 @@ describe("web login + dashboard scoping", () => {
     expect((await app.request("/access", { headers: { cookie } })).status).toBe(403);
     // …and the admin nav link is not shown to them
     expect(html).not.toContain('href="/access"');
+  });
+
+  test("the container picker searches and respects scope", async () => {
+    const app = harness();
+    const adminCookie = await webLogin(app, TOKEN);
+    const all = await (await app.request("/forwards/pick", { headers: { cookie: adminCookie } })).text();
+    expect(all).toContain("postgres");
+    expect(all).toContain("redis");
+
+    const filtered = await (await app.request("/forwards/pick/list?q=redis", { headers: { cookie: adminCookie } })).text();
+    expect(filtered).toContain("redis");
+    expect(filtered).not.toContain("postgres");
+
+    // a scoped user's picker only lists what their role can forward
+    const key = await makeScopedKey(app);
+    const userPick = await (await app.request("/forwards/pick", { headers: { cookie: await webLogin(app, key) } })).text();
+    expect(userPick).toContain("postgres");
+    expect(userPick).not.toContain("redis");
   });
 
   test("admin reaches the Roles & Access page", async () => {

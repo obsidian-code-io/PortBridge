@@ -43,6 +43,34 @@ function portDatalist(target: Target): Html {
   </datalist>`;
 }
 
+// A searchable list of containers to forward to — the "select the Docker image
+// easily" entry point. Rows filter live by name or image via HTMX.
+function pickRow(t: Target): Html {
+  const ports = t.ports.length ? t.ports.map((p) => p.port).join(", ") : "no exposed ports";
+  return html`<button type="button"
+    class="flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left hover:opacity-90"
+    style="${S_SURFACE};min-height:44px" hx-get="/forwards/new?target=${t.id}" hx-target="#pb-modal-body" hx-swap="innerHTML">
+    <span class="min-w-0"><span class="font-mono font-medium">${t.name}</span>
+      <span class="ms-1" style="${S_MUTED}">${t.image}</span></span>
+    <span class="shrink-0 text-xs" style="${S_MUTED}">${ports}</span>
+  </button>`;
+}
+
+export function pickList(targets: readonly Target[]): Html {
+  if (targets.length === 0) return html`<div class="rounded-md border px-4 py-6" style="${S_BOX}">No matching containers.</div>`;
+  return html`<div class="space-y-1">${targets.map(pickRow)}</div>`;
+}
+
+export function forwardPicker(targets: readonly Target[]): Html {
+  return html`<div class="p-5 text-sm">
+    <h3 class="mb-3 text-base font-semibold">New forward</h3>
+    <input type="search" name="q" autocomplete="off" autofocus placeholder="Search containers by name or image…"
+      class="mb-3 w-full rounded border px-3 py-2" style="${S_SURFACE};min-height:44px"
+      hx-get="/forwards/pick/list" hx-trigger="input changed delay:200ms, search" hx-target="#pick-list" hx-swap="innerHTML" />
+    <div id="pick-list" class="max-h-80 overflow-y-auto">${pickList(targets)}</div>
+  </div>`;
+}
+
 export function forwardForm(target: Target, error?: string): Html {
   const firstPort = target.ports[0]?.port;
   const input = "w-full rounded border px-2 py-1.5";
@@ -52,6 +80,8 @@ export function forwardForm(target: Target, error?: string): Html {
     hx-target="#pb-modal-body"
     hx-swap="innerHTML"
   >
+    <button type="button" class="text-xs hover:opacity-80" style="${S_MUTED}"
+      hx-get="/forwards/pick" hx-target="#pb-modal-body" hx-swap="innerHTML">‹ choose another container</button>
     <h3 class="pe-6 text-base font-semibold">New forward → <span class="font-mono">${target.name}</span></h3>
     ${error !== undefined ? forwardError(error) : ""}
     <input type="hidden" name="targetId" value="${target.id}" />

@@ -45,7 +45,12 @@ function dashboardBody(targets: readonly Target[], error: string | undefined): H
   </section>
 
   <section>
-    <h2 class="mb-3 text-lg font-medium">Managed forwards</h2>
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="text-lg font-medium">Managed forwards</h2>
+      <button class="rounded-md px-3 py-2 text-sm font-medium hover:opacity-90"
+        style="background:var(--brand-primary);color:var(--brand-primary-fg);min-height:44px"
+        hx-get="/forwards/pick" hx-target="#pb-modal-body" hx-swap="innerHTML">New forward</button>
+    </div>
     ${managedForwardsSection()}
   </section>`;
 }
