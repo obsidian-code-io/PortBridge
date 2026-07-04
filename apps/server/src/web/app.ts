@@ -15,6 +15,7 @@ import { forwardRoutes } from "./routes/forwards.ts";
 import { auditRoutes } from "./routes/audit.ts";
 import { apiRoutes } from "./routes/api.ts";
 import { rolesRoutes } from "./routes/roles.ts";
+import { accessRoutes } from "./routes/access.ts";
 import { onboardingRoutes } from "./routes/onboarding.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 
@@ -58,7 +59,7 @@ export function createApp(
   app.use("*", authGuard(config, access));
 
   // Onboarding + Settings share the brand store (parity). Mount before the gate.
-  app.route("/", onboardingRoutes(brandStore));
+  app.route("/", onboardingRoutes(brandStore, access));
   app.route("/", settingsRoutes(brandStore));
 
   // First-run gate: send an authenticated, not-yet-onboarded user to onboarding.
@@ -79,6 +80,7 @@ export function createApp(
   app.route("/", auditRoutes(reader));
   app.route("/", apiRoutes(docker, config, audit, registry));
   app.route("/", rolesRoutes(access));
+  app.route("/", accessRoutes(access));
 
   return { app, registry };
 }

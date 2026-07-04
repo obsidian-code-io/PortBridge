@@ -144,5 +144,23 @@ describe("web login + dashboard scoping", () => {
     expect(home.status).toBe(200);
     expect(html).toContain("postgres");
     expect(html).not.toContain("redis");
+
+    // a keyed (non-admin) user cannot reach the Roles & Access admin page
+    expect((await app.request("/access", { headers: { cookie } })).status).toBe(403);
+    // …and the admin nav link is not shown to them
+    expect(html).not.toContain('href="/access"');
+  });
+
+  test("admin reaches the Roles & Access page", async () => {
+    const app = harness();
+    const login = await app.request("/login", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: TOKEN }).toString(),
+    });
+    const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    const res = await app.request("/access", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Roles &amp; Access");
   });
 });

@@ -25,10 +25,11 @@ export function dashboardRoutes(docker: Docker): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.get("/", async (c) => {
+    const admin = c.get("principal").kind === "admin";
     try {
-      return c.html(dashboardPage(await visibleTargets(docker, c.get("principal")), c.get("brand"), c.get("csrf")));
+      return c.html(dashboardPage(await visibleTargets(docker, c.get("principal")), c.get("brand"), c.get("csrf"), admin));
     } catch {
-      return c.html(dashboardPage([], c.get("brand"), c.get("csrf"), DOCKER_ERROR), 503);
+      return c.html(dashboardPage([], c.get("brand"), c.get("csrf"), admin, DOCKER_ERROR), 503);
     }
   });
 

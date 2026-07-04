@@ -23,7 +23,7 @@ export function settingsRoutes(store: BrandStore): Hono<AppEnv> {
 
   router.get("/settings", (c) => {
     const notice = c.req.query("saved") === "1" ? ({ kind: "ok", text: "Branding saved." } as const) : undefined;
-    return c.html(settingsPage(store.get(), c.get("csrf"), notice));
+    return c.html(settingsPage(store.get(), c.get("csrf"), c.get("principal").kind === "admin", notice));
   });
 
   router.post("/settings", async (c) => {

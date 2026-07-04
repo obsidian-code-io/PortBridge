@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env.ts";
 import type { BrandInput } from "../../brand/types.ts";
 import { BrandStore, BrandValidationError } from "../../brand/store.ts";
-import { ONBOARDING_STEPS, onboardingFragment, onboardingPage } from "../views/onboarding.ts";
+import type { AccessStore } from "../../access/store.ts";
+import { ACCESS_STEP, ONBOARDING_STEPS, onboardingFragment, onboardingPage } from "../views/onboarding.ts";
 
-// Fields captured at each step (must mirror the step forms in the view).
+// Fields captured at each brand step (must mirror the step forms in the view).
 const STEP_KEYS: readonly (readonly string[])[] = [
   ["productName"],
   ["background", "primary", "logoDark", "tagline"],
@@ -20,7 +21,20 @@ function pick(body: Record<string, unknown>, keys: readonly string[]): BrandInpu
   return out as unknown as BrandInput;
 }
 
-export function onboardingRoutes(store: BrandStore): Hono<AppEnv> {
+function csv(v: unknown): string[] {
+  return typeof v === "string" ? v.split(",").map((s) => s.trim()).filter((s) => s !== "") : [];
+}
+
+/** The access step writes the access config (scopable ports/containers), not the brand. */
+function saveAccess(access: AccessStore, body: Record<string, unknown>): void {
+  access.setAccessConfig({
+    enabled: body["enabled"] !== undefined,
+    ports: csv(body["ports"]).map(Number).filter(Number.isInteger),
+    containers: csv(body["containers"]),
+  });
+}
+
+export function onboardingRoutes(store: BrandStore, access: AccessStore): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.get("/onboarding", (c) => {
@@ -34,11 +48,15 @@ export function onboardingRoutes(store: BrandStore): Hono<AppEnv> {
     const step = Math.max(0, Math.min(Number(body["step"]) || 0, ONBOARDING_STEPS - 1));
     const action = String(body["action"] ?? "next");
     if (action !== "skip") {
-      try {
-        store.save(pick(body, STEP_KEYS[step] ?? []));
-      } catch (err) {
-        if (err instanceof BrandValidationError) return c.html(onboardingFragment(store.get(), step, err.message));
-        throw err;
+      if (step === ACCESS_STEP) {
+        saveAccess(access, body);
+      } else {
+        try {
+          store.save(pick(body, STEP_KEYS[step] ?? []));
+        } catch (err) {
+          if (err instanceof BrandValidationError) return c.html(onboardingFragment(store.get(), step, err.message));
+          throw err;
+        }
       }
     }
     const next = step + 1;

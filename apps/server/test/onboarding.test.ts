@@ -82,9 +82,18 @@ describe("onboarding flow", () => {
     r = await app.request("/onboarding", form({ step: "1", action: "next", primary: "#1d4ed8" }, cookie, csrf));
     expect(await r.text()).toContain("Preferences");
 
-    // Step 2 finish → HX-Redirect to the app
+    // Step 2 → Access & roles step
     r = await app.request("/onboarding", form({ step: "2", action: "next" }, cookie, csrf));
+    expect(await r.text()).toContain("Forwardable ports");
+
+    // Step 3 finish (enable scoping, input ports) → HX-Redirect to the app
+    r = await app.request("/onboarding", form({ step: "3", action: "next", enabled: "1", ports: "5432, 6379" }, cookie, csrf));
     expect(r.headers.get("hx-redirect")).toBe("/");
+
+    // the access step persisted the scopable universe
+    const cfg = await (await app.request("/api/access-config", { headers: { authorization: `Bearer ${TOKEN}` } })).json();
+    expect(cfg.enabled).toBe(true);
+    expect(cfg.ports).toEqual([5432, 6379]);
 
     // Now the app is onboarded + branded
     const home = await app.request("/", { headers: { cookie }, redirect: "manual" });

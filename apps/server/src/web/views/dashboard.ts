@@ -54,7 +54,8 @@ export function dashboardPage(
   targets: readonly Target[],
   brand: BrandConfig,
   csrf: string,
+  admin: boolean,
   error?: string,
 ): Html {
-  return layout("Dashboard", dashboardBody(targets, error), { brand, csrf });
+  return layout("Dashboard", dashboardBody(targets, error), { brand, csrf, admin });
 }

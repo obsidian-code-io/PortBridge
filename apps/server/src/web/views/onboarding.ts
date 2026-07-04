@@ -2,7 +2,7 @@ import { html } from "hono/html";
 import type { Html } from "./html.ts";
 import type { BrandConfig } from "../../brand/types.ts";
 import { layout } from "./layout.ts";
-import { basicsFields, brandingFields, prefFields } from "./brand-form.ts";
+import { basicsFields, brandingFields, field, prefFields } from "./brand-form.ts";
 
 interface Step {
   readonly title: string;
@@ -11,11 +11,26 @@ interface Step {
   readonly cta: string;
 }
 
+function accessFields(): Html {
+  return html`<div class="space-y-3">
+    <label class="flex items-center gap-2" style="color:var(--brand-muted)">
+      <input type="checkbox" name="enabled" value="1" class="h-6 w-6 shrink-0" style="accent-color:var(--brand-primary)" />
+      Restrict access with roles (issue per-user API keys later in Roles &amp; Access)
+    </label>
+    ${field("ports", "Forwardable ports", "", { placeholder: "5432, 6379", hint: "Comma-separated — the ports roles may grant." })}
+    ${field("containers", "Forwardable containers", "", { placeholder: "postgres, redis", hint: "Optional — container names roles may grant." })}
+  </div>`;
+}
+
 const STEPS: readonly Step[] = [
   { title: "Workspace basics", subtitle: "The minimum to get started — everything else has smart defaults.", fields: basicsFields, cta: "Next" },
   { title: "Branding essentials", subtitle: "Product name, colour and logo. Applied to the app instantly.", fields: brandingFields, cta: "Next" },
-  { title: "Preferences", subtitle: "Support links, font and text direction — all optional.", fields: prefFields, cta: "Finish" },
+  { title: "Preferences", subtitle: "Support links, font and text direction — all optional.", fields: prefFields, cta: "Next" },
+  { title: "Access & roles", subtitle: "Optionally scope who can forward which ports and containers.", fields: () => accessFields(), cta: "Finish" },
 ];
+
+/** The access step is handled specially by the route (writes the access config, not the brand). */
+export const ACCESS_STEP = STEPS.length - 1;
 
 export const ONBOARDING_STEPS = STEPS.length;
 

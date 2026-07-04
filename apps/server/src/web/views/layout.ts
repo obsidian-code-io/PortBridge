@@ -31,6 +31,7 @@ export interface LayoutOpts {
   readonly brand: BrandConfig;
   readonly csrf?: string; // present ⇒ authenticated (hx-headers + app nav)
   readonly bare?: boolean; // login / onboarding: no app nav
+  readonly admin?: boolean; // show admin-only nav (Roles & Access)
 }
 
 function nav(opts: LayoutOpts): Html {
@@ -45,6 +46,7 @@ function nav(opts: LayoutOpts): Html {
   return html`<div class="flex items-center gap-2" style="color:var(--brand-muted)">
     <a href="/" class="${link}">dashboard</a>
     <a href="/audit" class="${link}">audit</a>
+    ${opts.admin === true ? html`<a href="/access" class="${link}">access</a>` : ""}
     <a href="/settings" class="${link}">settings</a>
     <button class="${link}" hx-post="/logout" style="color:var(--brand-muted)">sign out</button>
     ${themeToggle()}

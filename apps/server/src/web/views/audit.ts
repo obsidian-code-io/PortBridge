@@ -66,11 +66,12 @@ export function auditPage(
   selected: string | undefined,
   brand: BrandConfig,
   csrf: string,
+  admin: boolean,
 ): Html {
   const body = html`<section>
     <h2 class="mb-3 text-lg font-medium">Audit log <span class="text-xs" style="${S_MUTED}">(last 500)</span></h2>
     ${filterBar(selected)}
     ${auditTable(rows)}
   </section>`;
-  return layout("Audit", body, { brand, csrf });
+  return layout("Audit", body, { brand, csrf, admin });
 }
