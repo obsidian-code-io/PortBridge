@@ -9,6 +9,7 @@ import { upgradeWebSocket } from "hono/bun";
 import type { Config } from "../config.ts";
 import type { AuditWriter } from "../audit/types.ts";
 import type { AppEnv } from "../web/env.ts";
+import type { AccessStore } from "../access/store.ts";
 import { listTcpForwards } from "../docker/forwards.ts";
 import { makeDialResolver } from "./reachability.ts";
 import { TunnelRegistry } from "./registry.ts";
@@ -21,6 +22,7 @@ export function agentRoutes(
   config: Config,
   audit: AuditWriter,
   registry: TunnelRegistry,
+  access: AccessStore,
 ): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
   const dial = makeDialResolver(docker);
@@ -28,7 +30,7 @@ export function agentRoutes(
 
   router.get(
     "/agent/control",
-    agentControlGuard(config, audit),
+    agentControlGuard(config, audit, access),
     upgradeWebSocket(makeControlEvents({ registry, config, audit, dial, count })),
   );
 

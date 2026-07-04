@@ -10,8 +10,11 @@
 import type { Context, MiddlewareHandler } from "hono";
 import type { Config } from "../config.ts";
 import type { AuditWriter } from "../audit/types.ts";
+import type { AppEnv } from "../web/env.ts";
+import type { AccessStore } from "../access/store.ts";
+import { resolvePrincipal } from "../access/resolver.ts";
 import { RateLimiter } from "../auth/ratelimit.ts";
-import { bearerToken, tokenMatches } from "../auth/token.ts";
+import { bearerToken } from "../auth/token.ts";
 
 const AUTH_MAX_ATTEMPTS = 5;
 const AUTH_WINDOW_MS = 15 * 60 * 1000;
@@ -32,13 +35,18 @@ function clientIp(c: Context): string {
  * admin token is high-entropy, so this is defense-in-depth, not the primary
  * control. (Behind a trusted reverse proxy, X-Forwarded-For is authoritative.)
  */
-export function agentControlGuard(config: Config, audit: AuditWriter): MiddlewareHandler {
+export function agentControlGuard(config: Config, audit: AuditWriter, access: AccessStore): MiddlewareHandler<AppEnv> {
   const perIp = new RateLimiter(AUTH_MAX_ATTEMPTS, AUTH_WINDOW_MS);
   const global = new RateLimiter(AUTH_GLOBAL_MAX, AUTH_WINDOW_MS);
   return async (c, next) => {
     if (c.req.header("origin") !== undefined) return c.text("origin not allowed", 403);
-    const token = bearerToken(c.req.header("authorization"));
-    if (token !== undefined && tokenMatches(token, config.adminToken)) return next();
+    // The agent authenticates with the admin token or a per-user key; the
+    // resolved principal is enforced per tunnel-open on the control channel.
+    const principal = resolvePrincipal(config, access, bearerToken(c.req.header("authorization")));
+    if (principal !== undefined) {
+      c.set("principal", principal);
+      return next();
+    }
     const ipOk = perIp.check(clientIp(c));
     const globalOk = global.check("global");
     const allowed = ipOk && globalOk;

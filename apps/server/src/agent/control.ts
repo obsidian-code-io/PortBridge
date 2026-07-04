@@ -5,6 +5,7 @@
  * (SSRF + reachability) and enforces the shared MAX_FORWARDS cap.
  */
 
+import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import {
   assertNever,
@@ -15,6 +16,8 @@ import {
 } from "@obsidiancode/portbridge-protocol";
 import type { Config } from "../config.ts";
 import type { AuditWriter } from "../audit/types.ts";
+import type { AppEnv } from "../web/env.ts";
+import { ADMIN_PRINCIPAL, denyReason, forwardAllowed, type Principal } from "../access/types.ts";
 import type { ControlSink, TunnelRegistry } from "./registry.ts";
 import type { DialResolver } from "./reachability.ts";
 
@@ -35,6 +38,7 @@ interface RawTextWs {
 
 interface ControlState {
   readonly sink: ControlSink;
+  readonly principal: Principal; // enforced per tunnel-open
   awaitingPong: number;
   closed: boolean;
   interval?: ReturnType<typeof setInterval>;
@@ -70,6 +74,11 @@ async function handleOpen(deps: ControlDeps, state: ControlState, msg: OpenMessa
     }
     const dt = await deps.dial(msg.targetId, msg.targetPort);
     if (state.closed) return; // control dropped during validation — don't leak an unreapable tunnel
+    // Enforce the agent's role scope against the resolved container + port.
+    if (!forwardAllowed(state.principal, dt.targetName, msg.targetPort)) {
+      state.sink.send({ type: "error", reqId: msg.reqId, message: denyReason(state.principal, dt.targetName, msg.targetPort) || "forbidden" });
+      return;
+    }
     const opened = deps.registry.open(
       {
         targetId: dt.targetId,
@@ -147,9 +156,11 @@ function teardown(deps: ControlDeps, state: ControlState): void {
 
 /** Build the WSEvents factory for the control channel. */
 export function makeControlEvents(deps: ControlDeps) {
-  return () => ({
+  return (c: Context<AppEnv>) => ({
     onOpen(_evt: Event, ws: WSContext): void {
-      const state: ControlState = { sink: controlSink(ws.raw as RawTextWs), awaitingPong: 0, closed: false };
+      // The guard resolved and set the principal on the upgrade request.
+      const principal = c.get("principal") ?? ADMIN_PRINCIPAL;
+      const state: ControlState = { sink: controlSink(ws.raw as RawTextWs), principal, awaitingPong: 0, closed: false };
       state.interval = startHeartbeat(state, ws);
       states.set(rawOf(ws), state);
     },

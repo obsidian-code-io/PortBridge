@@ -4,9 +4,13 @@ import { type AddressInfo, createServer, type Server as NetServer } from "node:n
 import type Docker from "dockerode";
 import type { Config } from "../src/config.ts";
 import type { AuditEvent, AuditWriter } from "../src/audit/types.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { agentRoutes } from "../src/agent/routes.ts";
 import { agentWebsocket } from "../src/agent/websocket.ts";
 import { TunnelRegistry } from "../src/agent/registry.ts";
+import { AccessStore } from "../src/access/store.ts";
 
 const TOKEN = "0123456789abcdef0123";
 
@@ -48,6 +52,7 @@ interface Harness {
   port: number;
   registry: TunnelRegistry;
   events: AuditEvent[];
+  access: AccessStore;
   stop: () => void;
 }
 
@@ -71,12 +76,15 @@ function startServer(maxForwards = 50, tcpCount = 0): Harness {
   const events: AuditEvent[] = [];
   const audit: AuditWriter = { write: (e) => events.push(e) };
   const registry = new TunnelRegistry(60);
+  const dataDir = mkdtempSync(join(tmpdir(), "pb-agent-e2e-"));
+  started.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  const access = new AccessStore(dataDir);
   const app = new Hono();
-  app.route("/", agentRoutes(fakeDocker(tcpCount), makeConfig(maxForwards), audit, registry));
+  app.route("/", agentRoutes(fakeDocker(tcpCount), makeConfig(maxForwards), audit, registry, access));
   const server = Bun.serve({ port: 0, fetch: app.fetch, websocket: agentWebsocket });
   const stop = () => server.stop(true);
   started.push(stop);
-  return { port: server.port, registry, events, stop };
+  return { port: server.port, registry, events, access, stop };
 }
 
 function controlWs(port: number, token: string, origin?: string): WebSocket {
@@ -111,6 +119,16 @@ function openTunnel(port: number, targetId: string, targetPort: number): Promise
       } else if (m["type"] === "error") reject(new Error(String(m["message"])));
       else extra?.(m);
     };
+    ws.onerror = () => reject(new Error("control error"));
+    ws.onopen = () => ws.send(JSON.stringify({ type: "open", reqId: "r1", targetId, targetPort, ttlMinutes: 60 }));
+  });
+}
+
+// Open with an arbitrary credential; resolve the first control reply (opened|error).
+function openWith(port: number, token: string, targetId: string, targetPort: number): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const ws = controlWs(port, token);
+    ws.onmessage = (e) => { resolve(JSON.parse(String(e.data)) as Record<string, unknown>); ws.close(); };
     ws.onerror = () => reject(new Error("control error"));
     ws.onopen = () => ws.send(JSON.stringify({ type: "open", reqId: "r1", targetId, targetPort, ttlMinutes: 60 }));
   });
@@ -178,6 +196,21 @@ describe("agent-tunnel end to end", () => {
     const h = startServer(1, 1); // cap 1, already one tcp sidecar
     await expect(openTunnel(h.port, "target1", echoPort)).rejects.toThrow(/MAX_FORWARDS/);
     expect(h.registry.size()).toBe(0);
+  });
+
+  test("a scoped agent key is enforced on tunnel-open", async () => {
+    const h = startServer();
+    // target1 resolves to container name "echo"; a key that excludes it is refused
+    const denyRole = h.access.createRole("nginx-only", { allPorts: true, ports: [], allContainers: false, containers: ["nginx"] });
+    const denied = await openWith(h.port, h.access.createKey("bob", denyRole.id).plaintext, "target1", echoPort);
+    expect(denied["type"]).toBe("error");
+    expect(String(denied["message"])).toMatch(/echo|container/i);
+    expect(h.registry.size()).toBe(0);
+
+    // a key that allows the container opens the tunnel
+    const okRole = h.access.createRole("echo-ok", { allPorts: true, ports: [], allContainers: false, containers: ["echo"] });
+    const ok = await openWith(h.port, h.access.createKey("alice", okRole.id).plaintext, "target1", echoPort);
+    expect(ok["type"]).toBe("opened");
   });
 
   test("a stream that floods binary before handshaking is closed (bounded memory)", async () => {

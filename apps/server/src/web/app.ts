@@ -54,7 +54,7 @@ export function createApp(
   });
 
   app.route("/", loginRoutes(config, access, audit));
-  app.route("/", agentRoutes(docker, config, audit, registry));
+  app.route("/", agentRoutes(docker, config, audit, registry, access));
 
   app.use("*", authGuard(config, access));
 
