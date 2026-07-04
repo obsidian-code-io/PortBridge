@@ -31,11 +31,12 @@ function cell<T>(items: readonly T[], empty: string, render: (x: T) => Html): Ht
 }
 
 function forwardAction(target: Target): Html {
+  // Loads the create form into the shared modal host; chrome JS opens it on swap.
   return html`<button
     class="rounded px-2 py-1 text-xs hover:opacity-80"
     style="${S_CHIP}"
     hx-get="/forwards/new?target=${target.id}"
-    hx-target="#panel"
+    hx-target="#pb-modal-body"
     hx-swap="innerHTML"
   >forward</button>`;
 }

@@ -92,6 +92,10 @@ describe("onboarding flow", () => {
     expect(home.status).toBe(200);
     expect(html).toContain("Acme Tunnels");
     expect(html).toContain("--brand-primary:#1d4ed8");
+    // chrome: dark scheme, theme toggle, and the modal host for popups all ship
+    expect(html).toContain('[data-theme="dark"]');
+    expect(html).toContain('id="pb-theme-btn"');
+    expect(html).toContain('id="pb-modal"');
   });
 
   test("skip advances without requiring input", async () => {

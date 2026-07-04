@@ -16,6 +16,7 @@ import {
 import { ForwardError } from "../../docker/forwards-errors.ts";
 import { forwardError, forwardForm, forwardResultCard, managedForwardsTable } from "../views/forwards.ts";
 import { logsPage } from "../views/logs.ts";
+import type { Html } from "../views/html.ts";
 
 const LOG_TAIL_LINES = 200;
 
@@ -71,9 +72,18 @@ function auditCreated(audit: AuditWriter, action: "forward_created" | "forward_e
   });
 }
 
+// Re-render the create form (with an error) so the modal stays usable; fall back
+// to a bare banner only if the target has since disappeared.
+async function createErrorHtml(docker: Docker, targetId: string, message: string): Promise<Html> {
+  const target = (await listTargets(docker)).find((t) => t.id === targetId);
+  return target === undefined ? forwardError(message) : forwardForm(target, message);
+}
+
 async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, registry: ForwardRegistry, c: Context) {
-  const parsed = parseForwardInput(await c.req.parseBody());
-  if (!parsed.ok) return c.html(forwardError(parsed.error), 400);
+  const body = await c.req.parseBody();
+  const parsed = parseForwardInput(body);
+  const targetId = typeof body["targetId"] === "string" ? body["targetId"] : "";
+  if (!parsed.ok) return c.html(await createErrorHtml(docker, targetId, parsed.error), 400);
   try {
     const forward = await createForward(docker, config, registry, parsed.input);
     auditCreated(audit, "forward_created", forward);
@@ -81,7 +91,7 @@ async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, 
     return c.html(forwardResultCard(forward, hostOf(c.req.header("host"))));
   } catch (err) {
     audit.write({ actor: "admin", action: "create_failed", detail: messageFor(err) });
-    return c.html(forwardError(messageFor(err)), 400);
+    return c.html(await createErrorHtml(docker, targetId, messageFor(err)), 400);
   }
 }
 

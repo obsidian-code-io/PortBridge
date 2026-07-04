@@ -43,21 +43,17 @@ function portDatalist(target: Target): Html {
   </datalist>`;
 }
 
-export function forwardForm(target: Target): Html {
+export function forwardForm(target: Target, error?: string): Html {
   const firstPort = target.ports[0]?.port;
-  const input = "w-40 rounded border px-2 py-1";
+  const input = "w-full rounded border px-2 py-1.5";
   return html`<form
-    class="space-y-3 rounded-md border p-4 text-sm"
-    style="${S_SURFACE}"
+    class="space-y-3 p-5 text-sm"
     hx-post="/forwards"
-    hx-target="#panel"
+    hx-target="#pb-modal-body"
     hx-swap="innerHTML"
   >
-    <div class="flex items-center justify-between">
-      <h3 class="font-medium">New forward → <span class="font-mono">${target.name}</span></h3>
-      <button type="button" class="text-xs hover:opacity-80" style="${S_MUTED}"
-        hx-get="/forwards/panel" hx-target="#panel" hx-swap="innerHTML">close</button>
-    </div>
+    <h3 class="pe-6 text-base font-semibold">New forward → <span class="font-mono">${target.name}</span></h3>
+    ${error !== undefined ? forwardError(error) : ""}
     <input type="hidden" name="targetId" value="${target.id}" />
     <label class="block">
       <span class="mb-1 block" style="${S_MUTED}">Target port</span>
@@ -78,7 +74,8 @@ export function forwardForm(target: Target): Html {
       </select>
     </label>
     <label class="flex items-center gap-2" style="${S_MUTED}">
-      <input type="checkbox" name="confirmNever" value="1" />
+      <input type="checkbox" name="confirmNever" value="1" class="h-6 w-6 shrink-0"
+        style="accent-color:var(--brand-primary)" />
       I understand a "never" forward stays open until deleted
     </label>
     <button type="submit"
@@ -93,8 +90,8 @@ export function forwardResultCard(forward: Forward, host: string): Html {
   // Result cards are only rendered for tcp forwards (which always have a host port).
   const hostPort = forward.hostPort ?? 0;
   const address = `${host}:${hostPort}`;
-  return html`<div class="space-y-2 rounded-md border p-4 text-sm" style="background:var(--brand-surface);border-color:var(--brand-ok)">
-    <h3 class="font-medium" style="color:var(--brand-ok)">Forward open</h3>
+  return html`<div class="space-y-3 p-5 text-sm">
+    <h3 class="text-base font-semibold" style="color:var(--brand-ok)">✓ Forward open</h3>
     <div class="flex items-center gap-2">
       <code id="fwd-addr" class="rounded px-2 py-1 font-mono" style="${S_CHIP}">${address}</code>
       <button type="button" class="rounded px-2 py-1 text-xs hover:opacity-80" style="${S_CHIP}"
@@ -102,6 +99,10 @@ export function forwardResultCard(forward: Forward, host: string): Html {
     </div>
     <p style="${S_MUTED}">→ <span class="font-mono">${forward.targetName}:${forward.targetPort}</span> on ${forward.network}</p>
     <pre class="overflow-x-auto rounded px-3 py-2 text-xs" style="${S_CHIP}">${clientHint(host, hostPort, forward.targetPort)}</pre>
+    <div class="pt-1">
+      <button type="button" onclick="pbCloseModal()" class="rounded px-3 py-2 text-sm font-medium hover:opacity-90"
+        style="background:var(--brand-primary);color:var(--brand-primary-fg)">Done</button>
+    </div>
   </div>`;
 }
 
@@ -109,7 +110,7 @@ function extendControl(forward: Forward): Html {
   return html`<form
     class="flex items-center gap-1"
     hx-post="/forwards/${forward.id}/extend"
-    hx-target="#panel"
+    hx-target="#pb-modal-body"
     hx-swap="innerHTML"
     title="Extend recreates the sidecar — expect a brief connection blip."
   >

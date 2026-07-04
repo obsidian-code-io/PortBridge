@@ -61,6 +61,25 @@ both LTR and RTL. Fixed across
   `<No active forwards…`. Isolated `code`/`pre`/`.font-mono` and forced LTR
   direction on `code`/`pre`.
 
+## Branding, theme mode, and popup entry
+
+Later additions, all re-audited headless with no blockers/majors:
+
+- **Proper brand identity** — a default logo glyph (a rounded "forward" tile)
+  plus wordmark, rendered from tokens so it **inverts per theme** (black tile on
+  light, white tile on dark) and stays high-contrast; a matching branded favicon
+  baked from the primary colour; Inter loaded as a webfont with a system-stack
+  fallback. A custom logo URL still overrides the glyph.
+- **Light & dark mode** — the token system emits both schemes: light on `:root`,
+  dark under `prefers-color-scheme` when the user hasn't chosen, and under an
+  explicit `[data-theme="dark"]`. A header toggle flips it; the choice is saved
+  to `localStorage` and re-applied in `<head>` before first paint (no flash).
+  AA contrast holds in both modes on every surface.
+- **New entries as popups** — creating (and extending) a forward now opens a
+  native `<dialog>` modal instead of an inline panel: form → success card with
+  the client hint and a Done button, while the managed-forwards table refreshes
+  live underneath. Esc, backdrop click, and the ✕ all close it.
+
 ## Human gate — polish (not auto-approved)
 
 These meet WCAG 2.5.8 AA (all ≥24px) but sit under the 44px comfortable

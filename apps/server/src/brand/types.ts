@@ -44,7 +44,7 @@ export const BRAND_DEFAULTS: BrandConfig = {
   icon: "",
   background: "#ffffff", // white — clean monochrome default; neutrals derive from it
   primary: "#000000", // black — the default accent/fill on white
-  fontFamily: "system",
+  fontFamily: "inter", // proper webfont, with a system stack fallback
   supportEmail: "",
   supportUrl: "",
   links: [],

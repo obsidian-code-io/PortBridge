@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { contrastRatio, ensureReadable, parseHex, readableFg } from "../src/brand/contrast.ts";
-import { brandStyleCss, deriveTokens } from "../src/brand/tokens.ts";
+import { brandStyleCss, deriveTokens, themeBackgrounds } from "../src/brand/tokens.ts";
 import { BrandStore, BrandValidationError, validateBrand } from "../src/brand/store.ts";
 import { BRAND_DEFAULTS } from "../src/brand/types.ts";
 
@@ -68,6 +68,16 @@ describe("tokens", () => {
     expect(css).toContain("--brand-bg:#ffffff");
     expect(css).toContain("--brand-primary:#000000");
     expect(css).toContain("--brand-font:");
+  });
+  test("brandStyleCss ships both a light default and a dark scheme", () => {
+    const css = brandStyleCss({ ...BRAND_DEFAULTS, background: "#ffffff", primary: "#000000" });
+    expect(css).toContain(":root{--brand-bg:#ffffff"); // light on :root
+    expect(css).toContain("prefers-color-scheme:dark"); // follow the system when unset
+    expect(css).toContain('[data-theme="dark"]'); // explicit dark override
+    const light = themeBackgrounds("#ffffff");
+    expect(light.light).toBe("#ffffff");
+    expect(light.dark).not.toBe("#ffffff"); // a real dark base is derived
+    expect(themeBackgrounds("#0b0b0d").light).toBe("#ffffff"); // a dark brand still gets a light mode
   });
 });
 
