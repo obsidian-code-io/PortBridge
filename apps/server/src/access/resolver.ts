@@ -22,3 +22,18 @@ export function resolvePrincipal(
   if (role === undefined) return undefined;
   return { kind: "user", keyId: key.id, label: key.label, role };
 }
+
+/**
+ * Resolve a web-session subject ("admin" or "u:<keyId>") to a Principal. A user
+ * whose key was revoked or whose role vanished resolves to undefined, so the
+ * session is treated as invalid on the next request (revocation takes effect).
+ */
+export function principalFromSub(access: AccessStore, sub: string): Principal | undefined {
+  if (sub === "admin") return ADMIN_PRINCIPAL;
+  if (!sub.startsWith("u:")) return undefined;
+  const key = access.getKeyById(sub.slice(2));
+  if (key === undefined) return undefined;
+  const role = access.getRole(key.roleId);
+  if (role === undefined) return undefined;
+  return { kind: "user", keyId: key.id, label: key.label, role };
+}

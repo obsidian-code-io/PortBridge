@@ -6,7 +6,9 @@ import type { AppEnv } from "../env.ts";
 import type { AuditWriter } from "../../audit/types.ts";
 import { RateLimiter } from "../../auth/ratelimit.ts";
 import { createSession, verifySession, SESSION_COOKIE } from "../../auth/session.ts";
-import { tokenMatches } from "../../auth/token.ts";
+import type { AccessStore } from "../../access/store.ts";
+import { resolvePrincipal } from "../../access/resolver.ts";
+import type { Principal } from "../../access/types.ts";
 import { loginPage } from "../views/login.ts";
 
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -23,8 +25,12 @@ function isSecure(c: Context): boolean {
   return new URL(c.req.url).protocol === "https:";
 }
 
-function issueSession(c: Context, config: Config): void {
-  const { cookie } = createSession(config.adminToken);
+function subFor(principal: Principal): string {
+  return principal.kind === "admin" ? "admin" : `u:${principal.keyId}`;
+}
+
+function issueSession(c: Context, config: Config, principal: Principal): void {
+  const { cookie } = createSession(config.adminToken, subFor(principal));
   setCookie(c, SESSION_COOKIE, cookie, {
     httpOnly: true,
     sameSite: "Lax",
@@ -34,23 +40,31 @@ function issueSession(c: Context, config: Config): void {
   });
 }
 
-async function handleLogin(c: Context<AppEnv>, config: Config, audit: AuditWriter, limiter: RateLimiter) {
+async function handleLogin(
+  c: Context<AppEnv>,
+  config: Config,
+  access: AccessStore,
+  audit: AuditWriter,
+  limiter: RateLimiter,
+) {
   const ip = clientIp(c);
   if (!limiter.check(ip)) {
     audit.write({ actor: ip, action: "login_fail", detail: "rate_limited" });
     return c.html(loginPage(c.get("brand"), "Too many attempts. Try again later."), 429);
   }
   const token = (await c.req.parseBody())["token"];
-  if (typeof token === "string" && tokenMatches(token, config.adminToken)) {
-    issueSession(c, config);
-    audit.write({ actor: ip, action: "login_ok" });
+  // Accept the admin token or a per-user API key; either yields a Principal.
+  const principal = typeof token === "string" ? resolvePrincipal(config, access, token) : undefined;
+  if (principal !== undefined) {
+    issueSession(c, config, principal);
+    audit.write({ actor: principal.kind === "admin" ? ip : principal.label, action: "login_ok" });
     return c.redirect("/", 302);
   }
   audit.write({ actor: ip, action: "login_fail" });
-  return c.html(loginPage(c.get("brand"), "Invalid token."), 401);
+  return c.html(loginPage(c.get("brand"), "Invalid token or API key."), 401);
 }
 
-export function loginRoutes(config: Config, audit: AuditWriter): Hono<AppEnv> {
+export function loginRoutes(config: Config, access: AccessStore, audit: AuditWriter): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
   const limiter = new RateLimiter(LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
 
@@ -61,7 +75,7 @@ export function loginRoutes(config: Config, audit: AuditWriter): Hono<AppEnv> {
     return c.html(loginPage(c.get("brand")));
   });
 
-  router.post("/login", (c) => handleLogin(c, config, audit, limiter));
+  router.post("/login", (c) => handleLogin(c, config, access, audit, limiter));
 
   router.post("/logout", (c) => {
     deleteCookie(c, SESSION_COOKIE, { path: "/" });

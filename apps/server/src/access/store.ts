@@ -147,6 +147,14 @@ export class AccessStore {
       .run({ $at: this.now(), $id: id }).changes > 0;
   }
 
+  /** Look up a live key by its id (used to re-resolve a web session); undefined if revoked/missing. */
+  getKeyById(id: string): ApiKeyRecord | undefined {
+    const row = this.db
+      .query("SELECT * FROM api_keys WHERE id = $id AND revoked_at IS NULL")
+      .get({ $id: id }) as KeyRow | null;
+    return row === null ? undefined : this.rowToKey(row);
+  }
+
   /** Look up a live key by its plaintext; undefined if unknown or revoked. */
   resolveKey(plaintext: string): ApiKeyRecord | undefined {
     if (!plaintext.startsWith(KEY_PREFIX)) return undefined;

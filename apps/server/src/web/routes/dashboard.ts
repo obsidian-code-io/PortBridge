@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import type Docker from "dockerode";
 import type { AppEnv } from "../env.ts";
 import { listTargets, type Target } from "../../docker/containers.ts";
+import type { Principal } from "../../access/types.ts";
+import { targetVisible } from "../../access/visibility.ts";
 import { dashboardPage } from "../views/dashboard.ts";
 import { targetsTable, errorBanner } from "../views/targets.ts";
 
@@ -14,12 +16,17 @@ function filterTargets(targets: readonly Target[], query: string): Target[] {
   );
 }
 
+// A keyed user only sees targets its role allows; admin sees everything.
+async function visibleTargets(docker: Docker, principal: Principal): Promise<Target[]> {
+  return (await listTargets(docker)).filter((t) => targetVisible(principal, t));
+}
+
 export function dashboardRoutes(docker: Docker): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.get("/", async (c) => {
     try {
-      return c.html(dashboardPage(await listTargets(docker), c.get("brand"), c.get("csrf")));
+      return c.html(dashboardPage(await visibleTargets(docker, c.get("principal")), c.get("brand"), c.get("csrf")));
     } catch {
       return c.html(dashboardPage([], c.get("brand"), c.get("csrf"), DOCKER_ERROR), 503);
     }
@@ -28,7 +35,7 @@ export function dashboardRoutes(docker: Docker): Hono<AppEnv> {
   router.get("/targets", async (c) => {
     const query = (c.req.query("q") ?? "").trim().toLowerCase();
     try {
-      return c.html(targetsTable(filterTargets(await listTargets(docker), query)));
+      return c.html(targetsTable(filterTargets(await visibleTargets(docker, c.get("principal")), query)));
     } catch {
       return c.html(errorBanner(DOCKER_ERROR), 503);
     }

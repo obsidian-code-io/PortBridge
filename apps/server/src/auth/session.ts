@@ -17,6 +17,7 @@ const HKDF_INFO = "session-hmac-key";
 export interface Session {
   readonly exp: number;
   readonly csrf: string;
+  readonly sub: string; // principal subject: "admin" or "u:<keyId>"
 }
 
 function sessionKey(adminToken: string): Buffer {
@@ -32,10 +33,10 @@ function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-export function createSession(adminToken: string): { cookie: string; csrf: string } {
+export function createSession(adminToken: string, sub = "admin"): { cookie: string; csrf: string } {
   const csrf = randomBytes(16).toString("hex");
   const exp = nowSeconds() + SESSION_TTL_SECONDS;
-  const payload = Buffer.from(JSON.stringify({ exp, csrf }), "utf8").toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ exp, csrf, sub }), "utf8").toString("base64url");
   return { cookie: `${payload}.${sign(adminToken, payload)}`, csrf };
 }
 
@@ -50,7 +51,8 @@ function parsePayload(payload: string): Session | undefined {
   const rec = parsed as Record<string, unknown>;
   if (typeof rec["exp"] !== "number" || typeof rec["csrf"] !== "string") return undefined;
   if (rec["exp"] < nowSeconds()) return undefined;
-  return { exp: rec["exp"], csrf: rec["csrf"] };
+  const sub = typeof rec["sub"] === "string" ? rec["sub"] : "admin";
+  return { exp: rec["exp"], csrf: rec["csrf"], sub };
 }
 
 export function verifySession(adminToken: string, cookie: string | undefined): Session | undefined {

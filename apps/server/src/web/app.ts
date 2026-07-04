@@ -6,6 +6,7 @@ import type { AppEnv } from "./env.ts";
 import type { AuditReader } from "../audit/types.ts";
 import { authGuard } from "../auth/middleware.ts";
 import { BrandStore } from "../brand/store.ts";
+import { AccessStore } from "../access/store.ts";
 import { TunnelRegistry } from "../agent/registry.ts";
 import { agentRoutes } from "../agent/routes.ts";
 import { loginRoutes } from "./routes/login.ts";
@@ -13,6 +14,7 @@ import { dashboardRoutes } from "./routes/dashboard.ts";
 import { forwardRoutes } from "./routes/forwards.ts";
 import { auditRoutes } from "./routes/audit.ts";
 import { apiRoutes } from "./routes/api.ts";
+import { rolesRoutes } from "./routes/roles.ts";
 import { onboardingRoutes } from "./routes/onboarding.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 
@@ -33,6 +35,7 @@ export function createApp(
   const app = new Hono<AppEnv>();
   const registry = new TunnelRegistry(config.defaultTtlMinutes);
   const brandStore = new BrandStore(config.dataDir);
+  const access = new AccessStore(config.dataDir);
 
   // Make the brand config available to every rendered page (before first paint).
   app.use("*", async (c, next) => {
@@ -49,10 +52,10 @@ export function createApp(
     }
   });
 
-  app.route("/", loginRoutes(config, audit));
+  app.route("/", loginRoutes(config, access, audit));
   app.route("/", agentRoutes(docker, config, audit, registry));
 
-  app.use("*", authGuard(config));
+  app.use("*", authGuard(config, access));
 
   // Onboarding + Settings share the brand store (parity). Mount before the gate.
   app.route("/", onboardingRoutes(brandStore));
@@ -74,7 +77,8 @@ export function createApp(
   app.route("/", dashboardRoutes(docker));
   app.route("/", forwardRoutes(docker, config, audit, registry));
   app.route("/", auditRoutes(reader));
-  app.route("/", apiRoutes(docker, registry));
+  app.route("/", apiRoutes(docker, config, audit, registry));
+  app.route("/", rolesRoutes(access));
 
   return { app, registry };
 }

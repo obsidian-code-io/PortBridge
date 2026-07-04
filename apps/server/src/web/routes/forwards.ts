@@ -17,6 +17,9 @@ import { ForwardError } from "../../docker/forwards-errors.ts";
 import { forwardError, forwardForm, forwardResultCard, managedForwardsTable } from "../views/forwards.ts";
 import { logsPage } from "../views/logs.ts";
 import type { Html } from "../views/html.ts";
+import type { Principal } from "../../access/types.ts";
+import { denyReason, forwardAllowed } from "../../access/types.ts";
+import { forwardVisible, targetVisible } from "../../access/visibility.ts";
 
 const LOG_TAIL_LINES = 200;
 
@@ -79,11 +82,18 @@ async function createErrorHtml(docker: Docker, targetId: string, message: string
   return target === undefined ? forwardError(message) : forwardForm(target, message);
 }
 
-async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, registry: ForwardRegistry, c: Context) {
+async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, registry: ForwardRegistry, c: Context<AppEnv>) {
+  const principal = c.get("principal");
   const body = await c.req.parseBody();
   const parsed = parseForwardInput(body);
   const targetId = typeof body["targetId"] === "string" ? body["targetId"] : "";
   if (!parsed.ok) return c.html(await createErrorHtml(docker, targetId, parsed.error), 400);
+  // Enforce the caller's role scope against the resolved container + port.
+  const target = (await listTargets(docker)).find((t) => t.id === parsed.input.targetId);
+  if (target !== undefined && !forwardAllowed(principal, target.name, parsed.input.targetPort)) {
+    audit.write({ actor: principal.kind === "admin" ? "admin" : principal.label, action: "create_failed", detail: "out_of_scope" });
+    return c.html(await createErrorHtml(docker, targetId, denyReason(principal, target.name, parsed.input.targetPort)), 403);
+  }
   try {
     const forward = await createForward(docker, config, registry, parsed.input);
     auditCreated(audit, "forward_created", forward);
@@ -95,14 +105,26 @@ async function handleCreate(docker: Docker, config: Config, audit: AuditWriter, 
   }
 }
 
+// A scoped user may only act on a forward its role can see (else 403). Returns
+// true if the caller may proceed; "missing" forwards fall through to the op,
+// which reports its own not-found error.
+async function mayManage(docker: Docker, registry: ForwardRegistry, principal: Principal, id: string): Promise<boolean> {
+  if (principal.kind === "admin") return true;
+  const fwd = (await listForwards(docker, registry)).find((f) => f.id === id);
+  return fwd === undefined || forwardVisible(principal, fwd.targetName, fwd.targetPort);
+}
+
 async function handleExtend(
   docker: Docker,
   config: Config,
   audit: AuditWriter,
   registry: ForwardRegistry,
-  c: Context,
+  c: Context<AppEnv>,
   id: string,
 ) {
+  if (!(await mayManage(docker, registry, c.get("principal"), id))) {
+    return c.html(forwardError("Your role can't manage this forward."), 403);
+  }
   const ttlRaw = asString((await c.req.parseBody())["ttl"]) ?? String(config.defaultTtlMinutes);
   const ttl = ttlRaw === "never" ? "never" : asInt(ttlRaw) ?? config.defaultTtlMinutes;
   try {
@@ -128,11 +150,13 @@ export function forwardRoutes(
   router.get("/forwards/new", async (c) => {
     const target = (await listTargets(docker)).find((t) => t.id === c.req.query("target"));
     if (target === undefined) return c.html(forwardError("Target no longer exists."), 404);
+    if (!targetVisible(c.get("principal"), target)) return c.html(forwardError("Your role can't forward this target."), 403);
     return c.html(forwardForm(target));
   });
 
   router.get("/forwards/table", async (c) => {
-    const forwards = await listForwards(docker, registry);
+    const principal = c.get("principal");
+    const forwards = (await listForwards(docker, registry)).filter((f) => forwardVisible(principal, f.targetName, f.targetPort));
     return c.html(managedForwardsTable(forwards, hostOf(c.req.header("host")), Math.floor(Date.now() / 1000)));
   });
 
@@ -150,6 +174,9 @@ export function forwardRoutes(
 
   router.post("/forwards/:id/delete", async (c) => {
     const id = c.req.param("id");
+    if (!(await mayManage(docker, registry, c.get("principal"), id))) {
+      return c.html(forwardError("Your role can't manage this forward."), 403);
+    }
     const isTunnel = registry.has(id);
     await deleteForward(docker, registry, id, "ui");
     audit.write(
